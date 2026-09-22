@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# A newer push supersedes older runs of the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.12", "3.13"]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install bubblewrap (Linux sandbox for edit+bash tests)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap
+          # Ubuntu 24.04+ blocks unprivileged user namespaces via AppArmor; bwrap needs them.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Test
+        # On Linux a missing/non-working bwrap must fail tests/test_sandbox_bwrap.py, not skip it.
+        env:
+          ANYMODEL_REQUIRE_BWRAP: ${{ runner.os == 'Linux' && '1' || '0' }}
+        run: uv run pytest -q

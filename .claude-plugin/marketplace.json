@@ -1,0 +1,15 @@
+{
+  "name": "anymodel",
+  "owner": {
+    "name": "Eric Schwartz",
+    "url": "https://github.com/eschwa3"
+  },
+  "description": "Marketplace for anymodel-subagents: Claude Code subagents that run on outside models via OpenRouter.",
+  "plugins": [
+    {
+      "name": "anymodel-subagents",
+      "source": "./",
+      "description": "Dispatch read-heavy or mechanical work to cheap outside models as native-style subagents."
+    }
+  ]
+}
