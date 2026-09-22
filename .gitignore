@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+*.egg-info/
+.env
+.env.*
+.DS_Store
+bakeoff/runs/
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
+# ruflo / claude-flow local state
+.claude-flow/
+.swarm/
+ruvector.db
+.coverage

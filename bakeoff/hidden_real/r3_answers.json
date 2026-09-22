@@ -1,0 +1,53 @@
+{
+  "questions": [
+    {
+      "id": "Q1",
+      "prompt": "When a job's retry count reaches the configured limit, what releases its reservation, and what exactly decides dead-lettering vs. another retry? Name the function(s) and the precise condition.",
+      "fact_groups": [
+        {"keywords": ["fail_job"], "weight": 1.0},
+        {"keywords": ["scheduler.py", "jobsched.scheduler", "scheduler"], "weight": 0.5},
+        {"keywords": ["next_retry_count >= cfg.max_job_retries", ">= cfg.max_job_retries", ">= max_job_retries", "retry_count + 1"], "weight": 1.0},
+        {"keywords": ["mark_dead"], "weight": 1.0},
+        {"keywords": ["mark_failed_retry"], "weight": 0.5},
+        {"keywords": ["release_reservation"], "weight": 1.0}
+      ],
+      "wrong_claims": [
+        ["no retry limit", "retried indefinitely", "retries forever"],
+        ["reservation is never released", "stays reserved forever", "reservation is not released on failure"],
+        ["backoff delay", "exponential backoff", "waits before retrying"]
+      ]
+    },
+    {
+      "id": "Q2",
+      "prompt": "Which AppConfig keys affect how an invoice's tax is rounded, and in which function are they read?",
+      "fact_groups": [
+        {"keywords": ["tax_rate_bp"], "weight": 1.5},
+        {"keywords": ["compute_tax"], "weight": 1.0},
+        {"keywords": ["billing.py", "jobsched.billing"], "weight": 0.5},
+        {"keywords": ["round_half_up"], "weight": 1.0}
+      ],
+      "wrong_claims": [
+        ["rounding_mode", "tax_rounding_mode"],
+        ["repository.py computes tax", "tax is computed in repository"],
+        ["currency affects", "currency changes the rounding", "currency determines the rounding", "re:\\b(two|both|2)\\s+(appconfig\\s+)?keys\\b[^.\\n]{0,160}\\bcurrency\\b", "re:tax_rate_bp`?\\s*(and|,|&)\\s*`?currency"]
+      ]
+    },
+    {
+      "id": "Q3",
+      "prompt": "Trace what happens when a customer's plan is changed mid-cycle: which function/table records the change, and how does invoice generation pick it up?",
+      "fact_groups": [
+        {"keywords": ["change_plan"], "weight": 1.0},
+        {"keywords": ["plan_changes"], "weight": 1.0},
+        {"keywords": ["PlanChangeRepository"], "weight": 1.0},
+        {"keywords": ["generate_invoice"], "weight": 1.0},
+        {"keywords": ["list_for_period"], "weight": 1.0},
+        {"keywords": ["prorat"], "weight": 0.5}
+      ],
+      "wrong_claims": [
+        ["stored on the customer row", "customer table records the change", "customers.plan_id records the history"],
+        ["invoice is generated automatically when the plan changes", "generates an invoice immediately on plan change", "triggers billing automatically"],
+        ["billing.py updates the customer's plan", "generate_invoice changes the plan"]
+      ]
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+[project]
+name = "anymodel-subagents"
+version = "1.0.0"
+description = "Subagents for Claude Code and Codex CLI that run on any model (OpenRouter first). MCP server + plugin. ZDR by default, sandboxed."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+authors = [{ name = "Eric Schwartz" }]
+keywords = ["mcp", "claude-code", "codex", "subagents", "openrouter", "multi-agent", "swarm"]
+dependencies = [
+    "httpx>=0.27,<1",
+    "mcp>=2,<3",
+    "pyyaml>=6,<7",
+    "regex>=2024.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/eschwa3/anymodel"
+Documentation = "https://github.com/eschwa3/anymodel/tree/main/docs"
+Issues = "https://github.com/eschwa3/anymodel/issues"
+Security = "https://github.com/eschwa3/anymodel/blob/main/SECURITY.md"
+
+[project.scripts]
+anymodel-worker = "anymodel_subagents.cli:main"
+anymodel-subagents = "anymodel_subagents.server:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.6", "respx>=0.21"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/anymodel_subagents"]
+
+# The sdist is the package plus what a reader of PyPI needs; the plugin files, bake-off
+# fixtures and project tooling stay in the repository.
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/tests", "/docs", "/README.md", "/LICENSE", "/SECURITY.md", "/SPEC.md", "/pyproject.toml"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+# Bake-off fixtures, hidden tests, mutants and reference patches are data: reformatting them
+# breaks the saved patches and line-number answer keys.
+extend-exclude = ["bakeoff/ANSWERS.md", "bakeoff/fixture", "bakeoff/fixture_real", "bakeoff/hidden", "bakeoff/hidden_real", "bakeoff/looptest/hidden_tests", "bakeoff/looptest/reference", "bakeoff/looptest3/hidden_tests", "bakeoff/looptest3/reference", "bakeoff/looptest3/overlay"]
+target-version = "py312"

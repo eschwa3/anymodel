@@ -1,0 +1,31 @@
+{
+  "name": "anymodel-subagents",
+  "description": "Subagents for Claude Code that run on outside models (OpenRouter first). Push token-heavy reading, searching, editing and test-writing to cheap models; keep this session for architecture and review.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Eric Schwartz"
+  },
+  "homepage": "https://github.com/eschwa3/anymodel",
+  "repository": "https://github.com/eschwa3/anymodel",
+  "license": "MIT",
+  "keywords": ["mcp", "subagents", "openrouter", "multi-agent", "swarm", "codex"],
+  "mcpServers": {
+    "anymodel": {
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/eschwa3/anymodel@v1.0.0", "anymodel-subagents"],
+      "env": {
+        "OPENROUTER_API_KEY": "${user_config.openrouter_api_key}",
+        "ANYMODEL_STATE_DIR": "${CLAUDE_PLUGIN_DATA}"
+      }
+    }
+  },
+  "userConfig": {
+    "openrouter_api_key": {
+      "type": "string",
+      "title": "OpenRouter API key",
+      "description": "Used only to authenticate worker requests to OpenRouter; never sent anywhere else. Create a dedicated key for this plugin (openrouter.ai/keys) with a credit limit, and turn on Zero Data Retention in your OpenRouter privacy settings (openrouter.ai/settings/privacy) so worker prompts and completions aren't retained or used for training. Stored in your OS keychain, not in settings.json.",
+      "sensitive": true,
+      "required": true
+    }
+  }
+}

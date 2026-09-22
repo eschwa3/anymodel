@@ -1,0 +1,93 @@
+diff --git a/jobsched/migrations/0002_add_job_tags.sql b/jobsched/migrations/0002_add_job_tags.sql
+new file mode 100644
+index 0000000..6b4e085
+--- /dev/null
++++ b/jobsched/migrations/0002_add_job_tags.sql
+@@ -0,0 +1 @@
++ALTER TABLE jobs ADD COLUMN tags TEXT NOT NULL DEFAULT '';
+diff --git a/jobsched/models.py b/jobsched/models.py
+index fdecb3f..6da3ba9 100644
+--- a/jobsched/models.py
++++ b/jobsched/models.py
+@@ -47,6 +47,7 @@ class Job:
+     reserved_until: str | None = None
+     created_at: str = ""
+     updated_at: str = ""
++    tags: list[str] = field(default_factory=list)
+ 
+ 
+ @dataclass
+diff --git a/jobsched/repository.py b/jobsched/repository.py
+index e554099..30d1c21 100644
+--- a/jobsched/repository.py
++++ b/jobsched/repository.py
+@@ -10,6 +10,16 @@ from jobsched.models import Customer, Invoice, InvoiceLineItem, Job, JobStatus,
+ from jobsched.utils.time import now
+ 
+ 
++def _parse_tags(raw: str | None) -> list[str]:
++    if not raw:
++        return []
++    return [t for t in raw.split(",") if t]
++
++
++def _dump_tags(tags: list[str]) -> str:
++    return ",".join(tags)
++
++
+ def _row_to_plan(row: sqlite3.Row) -> Plan:
+     return Plan(
+         id=row["id"],
+@@ -30,6 +40,7 @@ def _row_to_customer(row: sqlite3.Row) -> Customer:
+ 
+ 
+ def _row_to_job(row: sqlite3.Row) -> Job:
++    keys = row.keys()
+     return Job(
+         id=row["id"],
+         customer_id=row["customer_id"],
+@@ -41,6 +52,7 @@ def _row_to_job(row: sqlite3.Row) -> Job:
+         reserved_until=row["reserved_until"],
+         created_at=row["created_at"],
+         updated_at=row["updated_at"],
++        tags=_parse_tags(row["tags"]) if "tags" in keys else [],
+     )
+ 
+ 
+@@ -103,12 +115,12 @@ class JobRepository:
+     def __init__(self, conn: sqlite3.Connection) -> None:
+         self.conn = conn
+ 
+-    def create(self, customer_id: int, name: str, priority: int = 0) -> Job:
++    def create(self, customer_id: int, name: str, priority: int = 0, tags: list[str] | None = None) -> Job:
+         ts = now().isoformat()
+         cur = self.conn.execute(
+             "INSERT INTO jobs (customer_id, name, status, priority, retry_count, "
+-            "created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?)",
+-            (customer_id, name, JobStatus.PENDING.value, priority, ts, ts),
++            "created_at, updated_at, tags) VALUES (?, ?, ?, ?, 0, ?, ?, ?)",
++            (customer_id, name, JobStatus.PENDING.value, priority, ts, ts, _dump_tags(tags or [])),
+         )
+         self.conn.commit()
+         return self.get(cur.lastrowid)
+@@ -185,6 +197,20 @@ class JobRepository:
+         ).fetchall()
+         return [_row_to_job(r) for r in rows]
+ 
++    def add_tag(self, job_id: int, tag: str) -> Job:
++        job = self.get(job_id)
++        if tag not in job.tags:
++            new_tags = [*job.tags, tag]
++            self.conn.execute(
++                "UPDATE jobs SET tags = ? WHERE id = ?", (_dump_tags(new_tags), job_id)
++            )
++            self.conn.commit()
++        return self.get(job_id)
++
++    def jobs_with_tag(self, tag: str) -> list[Job]:
++        rows = self.conn.execute("SELECT * FROM jobs ORDER BY id").fetchall()
++        return [j for j in (_row_to_job(r) for r in rows) if tag in j.tags]
++
+ 
+ class PlanChangeRepository:
+     def __init__(self, conn: sqlite3.Connection) -> None:

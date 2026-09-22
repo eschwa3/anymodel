@@ -1,0 +1,17 @@
+#:schema https://developers.openai.com/codex/config-schema.json
+
+# Project defaults for Codex. Keep model and account settings in the user's
+# ~/.codex/config.toml; AGENTS.md contains this repository's instructions.
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+network_access = false
+
+[mcp_servers.anymodel]
+command = "uvx"
+args = ["--from", "git+https://github.com/eschwa3/anymodel@v1.0.0", "anymodel-subagents"]
+startup_timeout_sec = 60
+env_vars = ["OPENROUTER_API_KEY"]
+env = { ANYMODEL_CONFIG = "~/.config/anymodel-subagents/config-codex.yaml" }
+tool_timeout_sec = 120
