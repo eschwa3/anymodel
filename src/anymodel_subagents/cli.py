@@ -40,6 +40,17 @@ def _build_parser() -> argparse.ArgumentParser:
     run_p.add_argument("--transcript", type=Path, default=None)
     run_p.add_argument("--json", action="store_true", dest="json_output")
 
+    denylist_p = sub.add_parser(
+        "denylist", help="Print the merged web denylist (bundled + user + config.yaml)"
+    )
+    denylist_p.add_argument(
+        "--format",
+        choices=["txt", "claude-code"],
+        default="txt",
+        help="txt: one normalized entry per line, exceptions prefixed with '!'. "
+        "claude-code: a permissions.deny JSON snippet on stdout, warnings on stderr.",
+    )
+
     return parser
 
 
@@ -122,11 +133,44 @@ async def _run_command(args: argparse.Namespace) -> int:
     return 0 if result.status == "completed" else 1
 
 
+def _denylist_command(args: argparse.Namespace) -> int:
+    # Imported lazily, matching this module's existing pattern for
+    # command-specific modules (see _run_command).
+    from anymodel_subagents.config import load_config
+    from anymodel_subagents.web_denylist import load_denylist, to_claude_code_rules
+
+    try:
+        cfg = load_config()
+    except ValueError as exc:
+        _log(f"Error: invalid config: {exc}")
+        return 2
+
+    try:
+        denylist = load_denylist(extra=cfg.web_denylist_extra)
+    except ValueError as exc:
+        _log(f"Error: invalid denylist: {exc}")
+        return 2
+
+    if args.format == "claude-code":
+        rules, warnings = to_claude_code_rules(denylist)
+        for warning in warnings:
+            _log(f"Warning: {warning}")
+        print(json.dumps({"permissions": {"deny": rules}}, indent=2))
+    else:
+        lines = sorted(denylist.deny) + sorted(f"!{domain}" for domain in denylist.exceptions)
+        for line in lines:
+            print(line)
+
+    return 0
+
+
 def main() -> None:
     parser = _build_parser()
     args = parser.parse_args()
     if args.command == "run":
         sys.exit(asyncio.run(_run_command(args)))
+    if args.command == "denylist":
+        sys.exit(_denylist_command(args))
     parser.print_help(sys.stderr)
     sys.exit(2)
 

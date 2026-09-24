@@ -1,0 +1,87 @@
+# Bundled web denylist (docs/adr/0001-worker-web-access.md, "Portable launch
+# denylist"). Format is documented in web_denylist.py's module docstring --
+# that docstring is the spec; this file just fills it in.
+#
+# Scope: known exfiltration sinks only -- services whose entire purpose is to
+# catch, relay, or anonymously host attacker-controlled traffic. No
+# general-purpose platforms (no github.com, no google.com): where a sink is a
+# feature of a broader platform, only that feature's own subdomain is listed.
+# This is a speed bump, not a boundary -- an attacker can always register a
+# fresh domain (see the ADR's security analysis).
+
+# --- Request catchers / webhook testers -------------------------------------
+webhook.site
+requestbin.com
+requestcatcher.com
+beeceptor.com
+hookbin.com
+mockbin.org
+mockbin.io
+ptsv2.com
+webhook-test.com
+putsreq.com
+m.pipedream.net
+
+# --- OAST / interaction servers (out-of-band callback / canary services) ----
+interactsh.com
+interact.sh
+oastify.com
+oast.fun
+oast.live
+oast.site
+oast.online
+oast.me
+oast.pro
+burpcollaborator.net
+canarytokens.com
+canarytokens.org
+dnslog.cn
+dnslog.link
+ceye.io
+
+# --- Paste sites --------------------------------------------------------------
+pastebin.com
+paste.ee
+hastebin.com
+controlc.com
+dpaste.com
+0bin.net
+rentry.co
+termbin.com
+ghostbin.com
+
+# --- URL shorteners -----------------------------------------------------------
+tinyurl.com
+bit.ly
+is.gd
+v.gd
+rebrand.ly
+t.co
+cutt.ly
+shorturl.at
+rb.gy
+
+# --- Tunnel / ingress services --------------------------------------------------
+ngrok.io
+ngrok-free.app
+ngrok.app
+trycloudflare.com
+loca.lt
+serveo.net
+pagekite.me
+localhost.run
+tunnelto.dev
+bore.pub
+localxpose.io
+
+# --- Anonymous file drops -------------------------------------------------------
+file.io
+transfer.sh
+anonfiles.com
+gofile.io
+0x0.st
+catbox.moe
+tmpfiles.org
+filebin.net
+ufile.io
+pixeldrain.com

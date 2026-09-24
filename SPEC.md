@@ -52,6 +52,20 @@ Names and shapes mirror Claude Code's tools (models are well-trained on them).
 
 **Injection posture:** worker output returned to the orchestrator is wrapped and labelled as untrusted worker output; file contents read by workers are data. Secrets redacted in transcripts (key patterns + the live key value) — and tested, since this was dead code in unlimited-mcp.
 
+## Web mode
+
+A fourth mode, `web`, gives a worker exactly `WebSearch` and `WebFetch` and
+nothing else — no file tools, no workspace, no `cwd`, no worktree isolation
+(`isolation` must be `"none"`). It's never combined with another mode. Calls
+are made by the server process (Brave for search, Jina Reader for fetch,
+`DNT` on every request), never from inside the sandbox, so the "no network"
+Bash sandbox posture above is unaffected. The feature is off by default and
+only turns on when the user sets `web_enabled: true` in `config.yaml` and a
+Brave key is present; nothing in `config.yaml`-mutating tooling can turn it
+on, since there is none (see invariant 1 in AGENTS.md). Full design,
+provider choice, the portable launch denylist, and the security analysis are
+in [ADR 0001](docs/adr/0001-worker-web-access.md).
+
 ## Roles (routing)
 
 `workers/*.md`, same shape as native agent files:
@@ -67,7 +81,7 @@ max_turns: 25
 <system prompt>
 ```
 
-Ships with `reviewer`, `researcher`, `codegen` (edit, worktree), `test-writer`. Search order (later overrides earlier by `name`): bundled → user config dir → project `.workers/` (project roles load only when the config sets `allow_project_roles: true`). Role list is rendered into the `dispatch` tool description so both orchestrators see identical routing; CLAUDE.md/AGENTS.md shrink to one policy line ("delegate X/Y/Z to workers"). `model` override allowed per task. Multi-model consensus = dispatch the same prompt under N models.
+Ships with `reviewer`, `researcher`, `codegen` (edit, worktree), `test-writer`, `web-researcher` (`web`, listed only when web access is enabled). Search order (later overrides earlier by `name`): bundled → user config dir → project `.workers/` (project roles load only when the config sets `allow_project_roles: true`). Role list is rendered into the `dispatch` tool description so both orchestrators see identical routing; CLAUDE.md/AGENTS.md shrink to one policy line ("delegate X/Y/Z to workers"). `model` override allowed per task. Multi-model consensus = dispatch the same prompt under N models.
 
 ## Packaging
 

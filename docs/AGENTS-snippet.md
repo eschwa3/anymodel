@@ -33,3 +33,7 @@ in headless runs as an unauthorized export of repository contents.
   `results`), then `git branch -D anymodel/<job_id>`.
 - Report cost (`cost_usd_total`) briefly. On failure, retry once with a
   sharper prompt, then just do it yourself.
+- For external facts (docs, changelogs, CVEs, API behavior), dispatch a
+  `web-researcher` job (only available if the user enabled web access) and
+  chain its findings into a code job's prompt — never paste secrets or
+  proprietary code into a web task.

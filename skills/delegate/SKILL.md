@@ -61,6 +61,28 @@ self-contained:
   task, tell the worker it can't run tests and must verify by reading.
   Either way, run the tests yourself after merging.
 
+## Web research
+
+`web-researcher` (`mode: web`) has WebSearch/WebFetch and nothing else — no
+files, no edit, no shell, no repo. Use it for external facts a code worker
+can't know from the repo: library/API behavior, changelogs, CVEs, prior art,
+"how do other projects configure X." It's only available when the user has
+turned on web access in their own `config.yaml`; don't tell a user to change
+their config for this unless they ask about web research specifically — if
+`web-researcher` isn't listed by `list_workers`/the `dispatch` description,
+web access is off, so do the research yourself instead.
+
+**Never paste secrets, credentials, customer data, or proprietary code into a
+web task.** The task prompt is the only thing a web worker's queries and
+fetches can leak — it has no other sensitive context — so keeping it out of
+the prompt is the control.
+
+To apply a web finding to code, run it as two dispatches: a `web-researcher`
+job first, then a code job (`codegen`/`test-writer`) with the finding pasted
+into its prompt. Never give a code worker a "look this up online" task — it
+has no web tools and will hallucinate an answer instead of failing.
+`web-researcher` needs no `cwd`; it never touches the workspace.
+
 ## The loop
 
 What costs you is not the workers, it is your own turns: every tool call

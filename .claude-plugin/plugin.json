@@ -15,7 +15,9 @@
       "args": ["--from", "git+https://github.com/eschwa3/anymodel@v1.0.0", "anymodel-subagents"],
       "env": {
         "OPENROUTER_API_KEY": "${user_config.openrouter_api_key}",
-        "ANYMODEL_STATE_DIR": "${CLAUDE_PLUGIN_DATA}"
+        "ANYMODEL_STATE_DIR": "${CLAUDE_PLUGIN_DATA}",
+        "BRAVE_API_KEY": "${user_config.brave_api_key}",
+        "JINA_API_KEY": "${user_config.jina_api_key}"
       }
     }
   },
@@ -26,6 +28,22 @@
       "description": "Used only to authenticate worker requests to OpenRouter; never sent anywhere else. Create a dedicated key for this plugin (openrouter.ai/keys) with a credit limit, and turn on Zero Data Retention in your OpenRouter privacy settings (openrouter.ai/settings/privacy) so worker prompts and completions aren't retained or used for training. Stored in your OS keychain, not in settings.json.",
       "sensitive": true,
       "required": true
+    },
+    "brave_api_key": {
+      "type": "string",
+      "title": "Brave Search API key",
+      "description": "Used only for worker web search (the web-researcher role), via the Brave Search API. Brave retains query records for up to 90 days for billing and troubleshooting. Also requires web_enabled: true in config.yaml. Leave unset to keep web access off. Stored in your OS keychain, not in settings.json.",
+      "sensitive": true,
+      "required": false,
+      "default": ""
+    },
+    "jina_api_key": {
+      "type": "string",
+      "title": "Jina Reader API key",
+      "description": "Used only for worker web page fetch (the web-researcher role), via Jina Reader. Requests are sent with DNT so Jina does not cache or log them. Optional: fetch works keyless at a lower rate limit. Stored in your OS keychain, not in settings.json.",
+      "sensitive": true,
+      "required": false,
+      "default": ""
     }
   }
 }

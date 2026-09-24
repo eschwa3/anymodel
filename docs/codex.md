@@ -53,6 +53,27 @@ Fields used above (see the Codex MCP docs for the complete set):
 
 Verify with `codex mcp list` / `codex mcp get anymodel`.
 
+## Web research (optional)
+
+`web-researcher` (`mode: web`) is off until `config.yaml` sets
+`web_enabled: true` (see [configuration.md](configuration.md#web-settings))
+and a Brave key is present. Forward it the same way as
+`OPENROUTER_API_KEY`, by name rather than as a literal value in
+`config.toml` — add it to the `env_vars` list from the hand-edited block
+above:
+
+```bash
+codex mcp add anymodel --env BRAVE_API_KEY=<your-brave-key> -- uvx --from git+https://github.com/eschwa3/anymodel@v1.0.0 anymodel-subagents
+```
+
+```toml
+env_vars = ["OPENROUTER_API_KEY", "BRAVE_API_KEY", "JINA_API_KEY"]
+```
+
+`JINA_API_KEY` is optional — omit it from `env_vars` and `WebFetch` still
+works, keyless, at a lower rate limit. Read SECURITY.md before turning this
+on: a web task's own prompt is the only thing that can leak through it.
+
 ## One config file per client
 
 `max_wait_s` is the one setting that conflicts between clients: Claude Code

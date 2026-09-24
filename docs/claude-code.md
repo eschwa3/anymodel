@@ -23,6 +23,26 @@ Retention** in your OpenRouter account's privacy settings
 `provider: {zdr: true, data_collection: "deny"}`, but that only has effect if
 your account-level setting allows ZDR routing in the first place.
 
+## Web research (optional)
+
+`web-researcher` (`mode: web`) is off until you turn it on. To enable it:
+
+1. Set `web_enabled: true` in your `config.yaml` (see
+   [docs/configuration.md](configuration.md#web-settings)).
+2. Run `/plugin` (or re-run the plugin's config prompt) and fill in the
+   **Brave Search API key** field — get a key at
+   [brave.com/search/api](https://brave.com/search/api/). It's `sensitive`,
+   so it's stored in your OS keychain like the OpenRouter key, and injected
+   into the server as `BRAVE_API_KEY`. Without it, a `web` task fails
+   validation even with `web_enabled: true`.
+3. Optionally fill in the **Jina Reader API key** field
+   ([jina.ai](https://jina.ai/reader/)) for `WebFetch` — leave it unset and
+   `WebFetch` still works, keyless, at a lower rate limit.
+
+Read [SECURITY.md](../SECURITY.md) before turning this on: a web task's own
+prompt is the only thing that can leak through it, so never put secrets,
+credentials, or proprietary code in a web task's prompt.
+
 `plugin.json`'s `mcpServers` entry pins that install to a tagged release
 (`git+https://github.com/eschwa3/anymodel@v1.0.0`) rather than a moving branch
 HEAD, so a plugin install today and one next month run the exact same,

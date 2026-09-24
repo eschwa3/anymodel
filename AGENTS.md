@@ -13,6 +13,7 @@ Design and rationale: [SPEC.md](SPEC.md). Threat model: [SECURITY.md](SECURITY.m
 | `engine.py`, `openrouter.py`, `redact.py`, `ledger.py` | Worker loop, OpenRouter client (ZDR prefs on every request), secret redaction, cost ledger. |
 | `tools/workspace.py`, `tools/files.py` | Path confinement + deny / write-deny / sensitive tables; Read, Grep, Glob, Edit, Write. |
 | `tools/bash.py`, `tools/sandbox.py` | Command allowlist (second layer) and the OS sandbox (Seatbelt / bwrap — the real boundary). |
+| `tools/web.py`, `web_client.py`, `web_denylist.py` | `WebSearch`/`WebFetch` for `mode: web` (Brave + Jina Reader providers, called by the server process, never the worker), URL validation, and the portable launch denylist. See [ADR 0001](docs/adr/0001-worker-web-access.md). |
 | `jobs.py`, `worktree.py`, `server.py` | Async job manager, worktree isolation + post-run policy scan, MCP tools. |
 | `roles.py`, `workers/*.md`, `models.py`, `config.py`, `cli.py` | Roles, bundled role prompts, ZDR model listing, read-only config, `anymodel-worker` CLI. |
 | `skills/`, `commands/`, `.claude-plugin/` | The **shipped plugin** (what users install). Not project tooling. |
@@ -38,8 +39,8 @@ The MCP SDK is 2.x: the server class is `mcp.server.mcpserver.MCPServer`, not `F
    user-edited only; nothing in the codebase writes it.
 2. Every OpenRouter request carries `provider: {zdr: true, data_collection: "deny",
    require_parameters: true}`; caller-supplied bodies cannot override `provider`/`model`/`messages`.
-3. The API key never reaches a worker: not in env, argv, transcripts, meta.json, ledger, errors.
-   Anything persisted or returned goes through `redact`.
+3. The OpenRouter and web-provider keys never reach a worker: not in env, argv, transcripts,
+   meta.json, ledger, errors. Anything persisted or returned goes through `redact`.
 4. File tools resolve through `LocalWorkspace.resolve()`; new file-touching code must too.
    Deny = things a code worker never needs; flag (`is_sensitive`) = legit but executes later.
 5. Bash runs only inside the OS sandbox (deny-default: no mach-lookup, no network, reads limited
@@ -49,6 +50,9 @@ The MCP SDK is 2.x: the server class is `mcp.server.mcpserver.MCPServer`, not `F
    `changed_files` comes from git/resolved paths, never from raw model arguments.
 7. git is invoked with argv lists, hooks/fsmonitor disabled, scrubbed env, timeouts.
 8. `cwd` must pass `validate_cwd` (inside a git work tree; never `$HOME`, an ancestor, `/`, or the state dir).
+9. `web` mode has no workspace tools, and no other mode has network tools. Web requests are made
+   by the server process, never from the sandbox; every URL passes `validate_web_url` and the
+   denylist.
 
 A change touching `tools/`, `jobs.py`, `worktree.py`, `server.py`, `engine.py`, or `redact.py`
 needs a regression test, and anything that alters a boundary gets an adversarial review

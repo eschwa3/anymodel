@@ -41,12 +41,16 @@ applied.
 | `bash_repo_venv` | bool | `true` | For edit+bash jobs, expose the source repository's `.venv` read-only inside the sandbox. See "Bash settings" below |
 | `allow_project_roles` | bool | `false` | Whether a project's own `.workers/` role files are honored. See "Roles" below |
 | `provider_sort` | string or `null` | `null` | OpenRouter provider sort: one of `throughput`, `latency`, `price`, or `null` (off). Setting it turns off OpenRouter's default price-weighted load balancing among ZDR-eligible providers, so it can pick a pricier one; leave it `null` unless you want that trade-off |
+| `web_enabled` | bool | `false` | Master switch for `mode: web` (the `web-researcher` role). See "Web settings" below |
+| `web_max_calls_per_job` | int (1-200) | `30` | Cap on `WebSearch`/`WebFetch` calls in a single web job. Over the cap, the tool returns an error and the worker finishes with what it has |
+| `web_denylist_extra` | list of strings | `[]` | Extra domains merged into the launch denylist. See "Web settings" below |
 
-`max_concurrency`, `max_turns`, `max_live_jobs`, `max_output_tokens`, and
-`max_wait_s` are clamped into their valid ranges rather than rejected if a
-value outside them is supplied; every other key is type-checked and rejected
-outright on mismatch. The budget caps are deliberately rejected too, never
-clamped: a silently-raised cap could spend past what you configured.
+`max_concurrency`, `max_turns`, `max_live_jobs`, `max_output_tokens`,
+`max_wait_s`, and `web_max_calls_per_job` are clamped into their valid ranges
+rather than rejected if a value outside them is supplied; every other key is
+type-checked and rejected outright on mismatch. The budget caps are
+deliberately rejected too, never clamped: a silently-raised cap could spend
+past what you configured.
 
 `wait`, `results`, and `cancel` additionally accept at most 200 `job_ids` per
 call (not configurable) — a single MCP call can't force an unbounded
@@ -106,6 +110,44 @@ They are operator policy: a worker can never change them.
   now. The path is derived server-side from the job's worktree metadata and
   re-validated at call time — never from a worker or orchestrator. Set
   `false` to disable.
+
+### Web settings
+
+`web_enabled`, `web_max_calls_per_job`, and `web_denylist_extra` configure
+`mode: web` (the `web-researcher` role) — see
+[ADR 0001](adr/0001-worker-web-access.md) for the full design. A worker can
+never change any of this.
+
+- `web_enabled` (default `false`) turns on `mode: web`. It also needs
+  `BRAVE_API_KEY` set (the Claude Code plugin's `brave_api_key` userConfig
+  field, or the env var directly) — web mode fails validation without one.
+  `JINA_API_KEY` is optional; `WebFetch` falls back to keyless Jina Reader
+  at a lower rate limit when it's unset. When `web_enabled` is `false`, or a
+  web-mode task is dispatched with no Brave key present, dispatch fails
+  validation instead of silently running some other mode.
+- `web_max_calls_per_job` (default `30`, clamped `1..200`) caps
+  `WebSearch`/`WebFetch` calls per job; see the table above.
+- `web_denylist_extra` (default `[]`) adds domains to the launch denylist
+  merged from three sources, in order: the bundled
+  `src/anymodel_subagents/web-denylist.txt`, the user file at
+  `${XDG_CONFIG_HOME:-~/.config}/anymodel-subagents/web-denylist.txt`, and
+  this key.
+
+**Denylist file format.** UTF-8, one lowercase IDNA A-label domain per line;
+`#` starts a comment, blank lines are ignored. An entry blocks that domain
+and every subdomain (`example.com` blocks `a.b.example.com`, not
+`notexample.com`). A leading `!` re-allows a subdomain of a blocked entry
+(`!raw.githubusercontent.com`); the longest match wins. It's deliberately a
+speed bump against known exfiltration sinks (request catchers, paste sites,
+URL shorteners, tunnel services), not a boundary — see SECURITY.md.
+
+**Reuse in Claude Code's own `WebFetch`.** `anymodel-worker denylist
+--format claude-code` prints the merged denylist as `permissions.deny`
+entries (`WebFetch(domain:…)`, plus a `*.` wildcard form so subdomains are
+covered too) to paste into `settings.json`, so the same list also protects
+native subagents' built-in web fetch. Entries with a `!` exception are
+skipped with a warning: Claude Code's deny rules have no equivalent, since
+deny always wins over allow there.
 
 ## State directory
 

@@ -47,7 +47,7 @@ _APP_NAME = "anymodel-subagents"
 # `role` field).
 _NAME_RE = re.compile(r"^[a-z0-9-]{2,40}$")
 _MODEL_RE = re.compile(r"^[A-Za-z0-9._:/-]{3,100}$")
-_VALID_MODES: tuple[str, ...] = ("read-only", "edit", "edit+bash")
+_VALID_MODES: tuple[str, ...] = ("read-only", "edit", "edit+bash", "web")
 _VALID_ISOLATION: tuple[str, ...] = ("none", "worktree")
 
 _MAX_BODY_CHARS = 20_000

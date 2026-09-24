@@ -53,12 +53,31 @@ Read it before pointing a worker at anything you care about.
   nothing to revert what they write outside the worktree.
   `edit+bash`'s own network posture (sandbox-enforced, no network) is
   documented alongside the sandbox implementation itself, below.
+- **Web mode (`mode: "web"`).** Off by default; a user turns it on with
+  `web_enabled: true` in `config.yaml` (invariant 1: no MCP tool can do this
+  for them). A `web` job has no file tools, no `cwd`, no workspace, and no
+  worktree (`isolation` must be `"none"`) — it is never combined with
+  another mode, so there is nothing sensitive in its context beyond its own
+  task prompt. `WebSearch`/`WebFetch` calls are made by the server process
+  itself (Brave for search, Jina Reader for fetch), never from inside the
+  sandbox and never by the worker opening a socket, so the "no network" Bash
+  sandbox posture above is unaffected by this feature. `WebFetch` URLs are
+  validated (`https` only, no userinfo, no IP-literal or internal hostnames)
+  and checked against a domain denylist before the call; see `tools/web.py`,
+  `web_client.py`, and `web_denylist.py`. See "Known residual risks" below
+  for what this containment does *not* cover — an exfiltration channel, a
+  guessable-domain denylist, and third-party retention.
 - **Secrets in the worker's own process.** `OPENROUTER_API_KEY` is read by
   the server/engine, never placed in a worker's own environment or tool
-  surface. Transcripts and the usage ledger run every string field through a
+  surface. The same holds for `BRAVE_API_KEY`/`JINA_API_KEY`: read by the
+  server, used only for the outbound Brave/Jina HTTP call, and never placed
+  in a worker's environment, tool results, or a web task's own transcript.
+  Transcripts and the usage ledger run every string field through a
   redactor that strips both key-shaped patterns and the live key value; this
   is unit-tested, because equivalent redaction was found to be dead code in a
-  prior, unrelated project.
+  prior, unrelated project. The web-provider keys are added to the same
+  redactor live-secret list and covered by the same regression test as the
+  OpenRouter key.
 - **Config integrity.** No MCP tool can write `config.yaml`, allowlists, or
   anything else that changes the server's own policy. `config.yaml` is
   user-edited only.
@@ -215,6 +234,44 @@ Read it before pointing a worker at anything you care about.
   They stop one dispatch call from exhausting the concurrency semaphore or
   server memory; they don't change what any individual job can read, write,
   or spend.
+- **A web task's own prompt is the exfiltration channel.** Web mode has no
+  file tools and no workspace, so the only sensitive material a web query or
+  fetch URL can carry is whatever the orchestrator put in that job's task
+  prompt. There is no code-level control for this beyond the call/length
+  caps and the denylist; it relies on the orchestrator (`skills/delegate`,
+  the `AGENTS.md` snippet) never pasting secrets, credentials, customer
+  data, or proprietary code into a web task. Treat that guidance as a
+  process control, not a boundary this codebase enforces.
+- **The launch denylist is a speed bump, not a boundary.** It blocks
+  well-known exfiltration sinks (request catchers, paste sites, URL
+  shorteners, tunnel services) by domain, merged from the bundled list, the
+  user's `web-denylist.txt`, and `web_denylist_extra`. An attacker who
+  controls what a worker fetches or searches for can register a fresh
+  domain the list has never seen; the list stops casual/known sinks, not a
+  targeted one. It also only ever applies to `WebFetch` URLs, not to what a
+  `WebSearch` query itself contains.
+- **Third-party retention of web queries and pages is real, and outside
+  OpenRouter's ZDR.** OpenRouter's `zdr: true` covers only the chat
+  completions call; it says nothing about Brave or Jina. Per each
+  provider's own privacy notice (checked 2026-09-24): Brave keeps a query
+  record for up to 90 days for billing and troubleshooting, and doesn't
+  mention training. Jina Reader fetches are sent with `DNT: 1` on every
+  request, which per Jina's own documentation means the request is not
+  cached or logged — but that only covers the fetch call this codebase
+  makes; a keyless (unauthenticated) Reader request is rate-limited but not
+  otherwise different in this respect. Neither guarantee is a contractual
+  ZDR term the way the OpenRouter routing preference is; both are the
+  vendor's stated policy at the time this was written, not something this
+  codebase can verify per-request. See ADR 0001 for the wider provider
+  survey this decision was based on.
+- **No anti-bot bypass, by design — a blocked fetch just fails.** The Jina
+  Reader integration exposes no proxy, header, cookie, or rendering-engine
+  knob to the model, and this codebase adds none of its own. A page that
+  blocks the fetch returns a short "fetch failed: blocked by site" error to
+  the worker, which is expected to move on to another source, not to retry
+  around the block. Jina may itself retry a blocked fetch through its own
+  proxy infrastructure (per the vendor's own public statement, 2026-05);
+  that retry path is outside this codebase's control.
 - **Supply-chain: pin, don't float.** Both the Claude Code plugin manifest
   and the Codex registration instructions install from
   `git+https://github.com/eschwa3/anymodel@<tag>` — a specific tagged commit,

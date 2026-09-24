@@ -1,0 +1,67 @@
+# Portable test vectors for the web denylist format (see
+# src/anymodel_subagents/web_denylist.py's module docstring for the format
+# spec). Any harness implementing that format should be able to load this
+# file and get the same allow/deny answers as this repo's reference matcher.
+#
+# Two sections, each introduced by a bracketed header on its own line:
+#
+#   [list]
+#   ...denylist file content, in the denylist format itself (comments,
+#      blank lines, `!` exceptions, IDN entries -- all allowed here)...
+#
+#   [cases]
+#   <host> <allow|deny>
+#      one case per line, whitespace-separated. <host> is looked up against
+#      the [list] above; the second column is the expected verdict.
+#
+# A line starting with `#` is a comment in both sections and is ignored.
+
+[list]
+# apex + subdomain coverage
+example.com
+# lookalike-suffix guard: this must NOT match notexample.com
+requestbin.com
+# IDN entry (Unicode); must match both this form and its punycode form
+müxample.com
+# exception nested under a blocked parent
+githubusercontent.com
+!raw.githubusercontent.com
+# nested re-deny under an exception (most specific entry wins)
+!safe.example.org
+evil.safe.example.org
+example.org
+
+[cases]
+# apex match
+example.com deny
+# deep subdomain of a blocked apex
+a.b.example.com deny
+# lookalike suffix is not a match
+notexample.com allow
+# unrelated domain
+anthropic.com allow
+# case-insensitive match
+EXAMPLE.COM deny
+Example.Com deny
+# trailing dot is ignored
+example.com. deny
+# IDN Unicode form matches the bundled punycode-equivalent entry
+müxample.com deny
+xn--mxample-n2a.com deny
+# subdomain of the IDN entry
+sub.müxample.com deny
+# exception re-allows the parent
+raw.githubusercontent.com allow
+# the parent itself (not the exception) is still blocked
+githubusercontent.com deny
+# a different, non-excepted subdomain of the blocked parent is still blocked
+gist.githubusercontent.com deny
+# exception's own subdomains are also allowed
+deep.raw.githubusercontent.com allow
+# exception under example.org allows that host and its subdomains
+safe.example.org allow
+sub.safe.example.org allow
+# a more specific deny entry beneath an exception wins again (longest match)
+evil.safe.example.org deny
+# example.org itself is denied by its own entry
+example.org deny

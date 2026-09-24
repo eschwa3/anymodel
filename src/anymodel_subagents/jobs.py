@@ -47,7 +47,10 @@ from anymodel_subagents.report import wrap_report
 from anymodel_subagents.roles import Role, load_roles_with_warnings
 from anymodel_subagents.tools import LocalWorkspace, sandbox, tools_for_mode
 from anymodel_subagents.tools.bash import BashPolicy
-from anymodel_subagents.types import Mode, Usage, WorkerResult
+from anymodel_subagents.tools.workspace import NullWorkspace
+from anymodel_subagents.types import Mode, Usage, WebClient, WorkerResult
+from anymodel_subagents.web_client import MissingWebKeyError
+from anymodel_subagents.web_denylist import Denylist, load_denylist
 from anymodel_subagents.worktree import (
     WorktreeError,
     changed_files_in_place,
@@ -79,8 +82,11 @@ _JOB_ID_RE = re.compile(r"^j-[A-Za-z0-9]{1,32}$")
 # `wait` never blocks longer than this, whatever a directly-constructed Config says.
 _WAIT_CEILING_S = 600.0
 _MODEL_RE = re.compile(r"^[A-Za-z0-9._:/-]{3,100}$")
-_VALID_MODES: tuple[str, ...] = ("read-only", "edit", "edit+bash")
+_VALID_MODES: tuple[str, ...] = ("read-only", "edit", "edit+bash", "web")
 _VALID_ISOLATION: tuple[str, ...] = ("none", "worktree")
+_WEB_DISABLED_MSG = (
+    "web mode is disabled; set web_enabled: true in config.yaml and set BRAVE_API_KEY"
+)
 # "budget_exceeded" is terminal exactly like "max_turns": the job is over, its
 # worktree (if any) is kept and policy-scanned, and its ledger entry is written.
 _TERMINAL_STATUSES = frozenset(
@@ -181,7 +187,7 @@ class _PreparedJob:
 
     job_id: str
     spec: TaskSpec
-    cwd_path: Path
+    cwd_path: Path | None  # None only for a `web`-mode task dispatched without a cwd
     note: str | None
     worktree_info: Any | None
     setup_error: str | None
@@ -245,6 +251,7 @@ def _worker_result_from_dict(d: dict[str, Any] | None) -> WorkerResult | None:
         turns=int(d.get("turns") or 0),
         usage=usage,
         tool_calls=int(d.get("tool_calls") or 0),
+        web_calls=int(d.get("web_calls") or 0),
         invalid_tool_calls=int(d.get("invalid_tool_calls") or 0),
         changed_files=list(d.get("changed_files") or []),
         sensitive_changed_files=list(d.get("sensitive_changed_files") or []),
@@ -349,12 +356,18 @@ class JobManager:
         client_factory: Callable[[], OpenRouterClient],
         run_worker: Callable[..., Awaitable[WorkerResult]] = engine.run_worker,
         budget: Budget | None = None,
+        web_client_factory: Callable[[], WebClient] | None = None,
     ) -> None:
         self._cfg = cfg
         self._state = Path(state)
         self._client_factory = client_factory
         self._run_worker = run_worker
         self._client: OpenRouterClient | None = None
+        # `web` mode: both lazily built once, like the OpenRouter client above --
+        # only when a task actually needs them (see `_validate_task`/`dispatch`).
+        self._web_client_factory = web_client_factory
+        self._web_client: WebClient | None = None
+        self._denylist: Denylist | None = None
         # Spend caps come from config.yaml only (no tool can change or reset
         # them); the day total is seeded from the ledger so a restart doesn't
         # forget what today already cost. Tests inject a Budget directly.
@@ -434,20 +447,61 @@ class JobManager:
             self._client = self._client_factory()
         return self._client
 
+    def _ensure_web_client(self) -> WebClient:
+        """Build the web-provider client on first use. Raises `MissingWebKeyError`
+        (e.g. no BRAVE_API_KEY) if `web_client_factory` fails; callers turn that
+        into a short per-task error rather than aborting the whole dispatch --
+        see `dispatch`'s per-task preparation loop.
+        """
+        if self._web_client is None:
+            if self._web_client_factory is None:
+                raise MissingWebKeyError("web access is not configured on this server")
+            self._web_client = self._web_client_factory()
+        return self._web_client
+
+    async def _ensure_denylist(self) -> Denylist:
+        """Load the web denylist on first use (off the event loop: it reads files)."""
+        if self._denylist is None:
+            self._denylist = await asyncio.to_thread(load_denylist, self._cfg.web_denylist_extra)
+        return self._denylist
+
     def redaction_secrets(self) -> list[str]:
         """Live secret values for callers (server.py) that build text outside this module."""
         return self._secrets()
 
     def _secrets(self) -> list[str]:
-        if self._client is None:
+        secrets: list[str] = []
+        for client in (self._client, self._web_client):
+            if client is None:
+                continue
+            getter = getattr(client, "redaction_secrets", None)
+            if not callable(getter):
+                continue
+            try:
+                secrets.extend(getter())
+            except Exception:  # noqa: BLE001, S110 - redaction must never fail bookkeeping
+                pass
+        return secrets
+
+    def _web_secrets(self) -> list[str]:
+        """Just the web provider's live secrets, for `engine.run_worker`'s `extra_secrets`.
+
+        (`self._secrets()` above is the OpenRouter-plus-web superset used for
+        meta.json/report.md/ledger; the OpenRouter half of that is already
+        covered inside `run_worker` via its own `client` argument, so passing
+        the full superset there would only add harmless duplicates -- this is
+        just the narrower, correct set.)
+        """
+        if self._web_client is None:
             return []
-        getter = getattr(self._client, "redaction_secrets", None)
+        getter = getattr(self._web_client, "redaction_secrets", None)
         if not callable(getter):
             return []
         try:
             return list(getter())
-        except Exception:  # noqa: BLE001 - redaction must never fail bookkeeping
-            return []
+        except Exception:  # noqa: BLE001, S110 - redaction must never fail bookkeeping
+            pass
+        return []
 
     # -- dispatch -------------------------------------------------------------
 
@@ -494,7 +548,7 @@ class JobManager:
             )
 
         normalized: list[TaskSpec] = []
-        cwd_paths: list[Path] = []
+        cwd_paths: list[Path | None] = []
         repo_roots: list[Path | None] = []
         notes: list[str | None] = []
         for i, spec in enumerate(tasks):
@@ -539,6 +593,21 @@ class JobManager:
                     # so far belong to no job yet, so nothing else would ever remove them.
                     self._discard_prepared(prepared)
                     raise
+            if spec.mode == "web" and setup_error is None:
+                # A missing key or a broken user denylist file must fail only this
+                # (web) job, never the rest of the batch -- see
+                # docs/adr/0001-worker-web-access.md and _validate_task's own,
+                # earlier "web_enabled/no factory" check (a config-level refusal
+                # that DOES abort the whole dispatch, same as a bad model id would).
+                try:
+                    self._ensure_web_client()
+                    await self._ensure_denylist()
+                except asyncio.CancelledError:
+                    raise
+                except MissingWebKeyError as exc:
+                    setup_error = f"web mode unavailable: {exc}"
+                except Exception as exc:  # noqa: BLE001 - a broken denylist must not fail the batch
+                    setup_error = f"web mode unavailable: {redact(str(exc), self._secrets())}"
             prepared.append(
                 _PreparedJob(
                     job_id=job_id,
@@ -597,7 +666,7 @@ class JobManager:
 
     async def _validate_task(
         self, index: int, spec: TaskSpec
-    ) -> tuple[TaskSpec, Path, Path | None, str | None]:
+    ) -> tuple[TaskSpec, Path | None, Path | None, str | None]:
         prefix = f"task {index}"
         note: str | None = None
 
@@ -606,20 +675,27 @@ class JobManager:
         if len(spec.prompt) > _MAX_PROMPT_CHARS:
             raise ValueError(f"{prefix}: prompt exceeds {_MAX_PROMPT_CHARS} characters")
 
-        if not spec.cwd:
-            raise ValueError(f"{prefix}: cwd is required")
-        try:
-            # `validate_cwd` shells out to git (subprocess.run, timeout 10 s):
-            # run it off the event loop, or a slow git call here stalls every
-            # other MCP call and every running job.
-            cwd_path = await asyncio.to_thread(validate_cwd, spec.cwd, self._cfg)
-        except ValueError as exc:
-            raise ValueError(f"{prefix}: {exc}") from exc
+        # `cwd` is validated up front whenever it's given (used for project-role
+        # lookup below), but whether it's REQUIRED depends on the task's mode --
+        # which isn't known until after role resolution (a role can supply
+        # `mode`). Only `web` mode makes it optional; every other mode still
+        # requires it, checked once `mode` is resolved below.
+        cwd_path: Path | None = None
+        if spec.cwd:
+            try:
+                # `validate_cwd` shells out to git (subprocess.run, timeout 10 s):
+                # run it off the event loop, or a slow git call here stalls every
+                # other MCP call and every running job.
+                cwd_path = await asyncio.to_thread(validate_cwd, spec.cwd, self._cfg)
+            except ValueError as exc:
+                raise ValueError(f"{prefix}: {exc}") from exc
 
         # Role resolution happens before any of model/mode/isolation/role_prompt/
         # max_turns are defaulted, since a role supplies defaults for exactly
         # those fields -- but any of them set explicitly on the task itself
-        # always wins (see TaskSpec's docstring).
+        # always wins (see TaskSpec's docstring). `cwd_path` may be None here
+        # (no cwd given): `_resolve_role` then looks up only bundled/user roles,
+        # no project-level `.workers/`.
         role_obj: Role | None = None
         if spec.role is not None:
             try:
@@ -630,6 +706,13 @@ class JobManager:
         mode = spec.mode if spec.mode is not None else (role_obj.mode if role_obj else "read-only")
         if mode not in _VALID_MODES:
             raise ValueError(f"{prefix}: invalid mode {mode!r}")
+
+        if mode == "web":
+            if not self._cfg.web_enabled or self._web_client_factory is None:
+                raise ValueError(f"{prefix}: {_WEB_DISABLED_MSG}")
+        elif cwd_path is None:
+            raise ValueError(f"{prefix}: cwd is required")
+
         # Isolation follows what was ASKED for: a role written for Bash expects a worktree,
         # and must not land in the caller's tree just because this machine degraded it.
         wanted_bash = mode == "edit+bash"
@@ -655,6 +738,11 @@ class JobManager:
             isolation = role_obj.isolation
         if isolation is not None and isolation not in _VALID_ISOLATION:
             raise ValueError(f"{prefix}: invalid isolation {isolation!r}")
+
+        if mode == "web" and isolation == "worktree":
+            # `web` mode has no workspace at all, so there is nothing for a worktree to
+            # isolate -- see docs/adr/0001-worker-web-access.md.
+            raise ValueError(f"{prefix}: mode 'web' does not support isolation \"worktree\"")
 
         if wanted_bash:
             # A sandboxed Bash script can write anywhere its sandbox profile
@@ -752,15 +840,17 @@ class JobManager:
         )
         return normalized, cwd_path, repo_root, note
 
-    async def _resolve_role(self, role_name: str, cwd_path: Path) -> Role:
+    async def _resolve_role(self, role_name: str, cwd_path: Path | None) -> Role:
         """Look up `role_name`, raising ValueError (listing available roles) if unknown.
 
         Resolved fresh per task (rather than cached once at manager
         construction) so that a task's own repo can contribute project-level
         roles via `<repo_root>/.workers/` -- see `roles.py`'s module docstring
-        for why those are gated behind `allow_project_roles`.
+        for why those are gated behind `allow_project_roles`. `cwd_path=None`
+        (a `web`-mode task with no `cwd`) means only bundled/user roles are
+        considered -- there is no project directory to look one up in.
         """
-        project_dir = await asyncio.to_thread(_git_toplevel, cwd_path)
+        project_dir = await asyncio.to_thread(_git_toplevel, cwd_path) if cwd_path else None
         roles_map, _warnings = load_roles_with_warnings(project_dir=project_dir, cfg=self._cfg)
         role = roles_map.get(role_name)
         if role is None:
@@ -860,11 +950,25 @@ class JobManager:
             job.started_at = time.time()
             self._write_meta(job)
 
-            ws = LocalWorkspace(job.workspace_root)
-            tools = tools_for_mode(
-                job.spec.mode,
-                bash_policy=BashPolicy(**_bash_policy_kwargs(job, self._cfg, self._state)),
-            )
+            # `web` mode has no workspace at all -- see docs/adr/0001-worker-web-access.md.
+            # `self._web_client`/`self._denylist` are guaranteed already built at this
+            # point: a web task whose setup failed (missing key, bad denylist) never
+            # reaches `_run_job` -- see `dispatch`'s per-task preparation loop, which
+            # records it as status "error" instead of scheduling this coroutine.
+            if job.spec.mode == "web":
+                ws: Any = NullWorkspace()
+                tools = tools_for_mode(
+                    "web",
+                    web_client=self._web_client,
+                    denylist=self._denylist,
+                    web_max_calls=self._cfg.web_max_calls_per_job,
+                )
+            else:
+                ws = LocalWorkspace(job.workspace_root)
+                tools = tools_for_mode(
+                    job.spec.mode,
+                    bash_policy=BashPolicy(**_bash_policy_kwargs(job, self._cfg, self._state)),
+                )
             system_prompt = engine.build_system_prompt(job.spec.role_prompt, ws, job.spec.mode)
             transcript_path = self._job_dir(job.job_id) / "transcript.jsonl"
             job.transcript_path = transcript_path
@@ -909,6 +1013,7 @@ class JobManager:
                     cancel_event=cancel_event,
                     on_progress=_on_progress,
                     on_cost=_on_cost,
+                    extra_secrets=self._web_secrets(),
                 )
             except Exception as exc:  # noqa: BLE001 - a crashing worker must not crash the manager
                 result = WorkerResult(

@@ -429,6 +429,38 @@ def _is_sensitive_path(relparts: tuple[str, ...]) -> bool:
     return _matches_any_depth(relparts, _SENSITIVE_GLOBS)
 
 
+# A synthetic path, never created on disk and never the caller's repo: `web`
+# mode has no workspace, so nothing should ever need to stat this -- see
+# `NullWorkspace` below and docs/adr/0001-worker-web-access.md.
+_NULL_WORKSPACE_ROOT = Path("/nonexistent/anymodel-web-mode")
+
+
+@dataclass(frozen=True)
+class NullWorkspace:
+    """The `Workspace` for `web`-mode workers: there is no filesystem access at all.
+
+    `web` mode gets no file/edit/bash tools (see `tools_for_mode`), so nothing
+    should ever call `resolve()`/`is_denied()`/`is_sensitive()` on this in
+    practice; each still fails safe (refuse / deny / not-sensitive) rather
+    than raising AttributeError, in case something does. `root` is a synthetic
+    path -- deliberately never the caller's repo, and never created on disk.
+    """
+
+    root: Path = _NULL_WORKSPACE_ROOT
+
+    def resolve(self, path: str, *, for_write: bool = False) -> Path:
+        raise PolicyError("web mode has no workspace")
+
+    def is_denied(self, path: str | Path) -> bool:
+        return True
+
+    def is_sensitive(self, path: str | Path) -> bool:
+        return False
+
+    def is_write_denied(self, path: str | Path) -> bool:
+        return True
+
+
 @dataclass
 class LocalWorkspace:
     """Confines a worker to `root`. Implements the Workspace protocol."""

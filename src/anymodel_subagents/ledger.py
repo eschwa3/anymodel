@@ -59,6 +59,7 @@ def record(
         "status": result.status,
         "turns": result.turns,
         "tool_calls": result.tool_calls,
+        "web_calls": result.web_calls,
         "invalid_tool_calls": result.invalid_tool_calls,
         "changed_files": result.changed_files,
         "sensitive_changed_files": result.sensitive_changed_files,
@@ -219,6 +220,7 @@ def summarize(
                 "reasoning_tokens": 0,
                 "cost": 0.0,
                 "requests": 0,
+                "web_calls": 0,
                 "statuses": {},
             },
         )
@@ -230,6 +232,7 @@ def summarize(
         g["reasoning_tokens"] += usage.get("reasoning_tokens") or 0
         g["cost"] += usage.get("cost") or 0.0
         g["requests"] += usage.get("requests") or 0
+        g["web_calls"] += entry.get("web_calls") or 0
         status = entry.get("status", "unknown")
         g["statuses"][status] = g["statuses"].get(status, 0) + 1
 

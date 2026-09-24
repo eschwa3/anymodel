@@ -72,12 +72,17 @@ _MAX_JOB_IDS_PER_CALL = jobs.MAX_JOB_IDS_PER_CALL
 
 class _RequiredTaskArg(TypedDict):
     prompt: str
-    cwd: str
 
 
 class TaskArg(_RequiredTaskArg, total=False):
-    """One task in a `dispatch` call. Only `prompt` and `cwd` are required."""
+    """One task in a `dispatch` call. Only `prompt` is required.
 
+    `cwd` (an absolute path inside a git work tree) is required for every
+    mode except `web`, which has no workspace; omit it (or pass "") for a
+    `web`-mode task. Defaults to "" when omitted.
+    """
+
+    cwd: str
     role: str
     model: str
     mode: str
@@ -533,7 +538,14 @@ _INSTRUCTIONS = (
 )
 
 
-def _dispatch_description(roles: dict[str, Role]) -> str:
+_WEB_MODE_LINE = (
+    '\n\nWeb access is enabled: a `mode: "web"` task (e.g. the `web-researcher` role) has '
+    "no workspace at all -- no `cwd`, no file/edit/bash tools -- so chain a web job then a "
+    "code job to apply its findings, and never paste secrets into a web task's prompt."
+)
+
+
+def _dispatch_description(roles: dict[str, Role], web_enabled: bool = False) -> str:
     base = """Start one task or a swarm of tasks on outside models and return immediately.
 
 Each task runs as an independent subagent with its own tool loop and
@@ -576,6 +588,8 @@ in its worktree. Budgets are set only in config.yaml: when
 one is reached, `dispatch` is refused outright and running jobs end with
 status `budget_exceeded`. Call `list_workers` for the full,
 structured role list plus available models."""
+    if web_enabled:
+        base += _WEB_MODE_LINE
     return base + "\n\n" + _render_roles_section(roles)
 
 
@@ -857,6 +871,7 @@ def _make_usage_report(manager: JobManager):
             "cached_tokens": 0,
             "reasoning_tokens": 0,
             "cost_usd": 0.0,
+            "web_calls": 0,
         }
         for g in groups.values():
             totals["jobs"] += g.get("jobs", 0)
@@ -865,6 +880,7 @@ def _make_usage_report(manager: JobManager):
             totals["cached_tokens"] += g.get("cached_tokens", 0)
             totals["reasoning_tokens"] += g.get("reasoning_tokens", 0)
             totals["cost_usd"] += g.get("cost", 0.0)
+            totals["web_calls"] += g.get("web_calls", 0)
 
         return {
             "since_days": since_days_int,
@@ -876,6 +892,17 @@ def _make_usage_report(manager: JobManager):
     return usage_report
 
 
+def _visible_roles(roles: dict[str, Role], web_enabled: bool) -> dict[str, Role]:
+    """Roles shown to an orchestrator: `mode: "web"` roles only when web access is on.
+
+    Routing a task to a role that would fail validation outright is worse than
+    not listing it (docs/adr/0001-worker-web-access.md).
+    """
+    if web_enabled:
+        return roles
+    return {name: role for name, role in roles.items() if role.mode != "web"}
+
+
 def build_server(
     manager: JobManager,
     *,
@@ -884,6 +911,7 @@ def build_server(
     default_model: str = "deepseek/deepseek-v4.1-flash",
     models_http: httpx.AsyncClient | None = None,
     server_info: dict[str, Any] | None = None,
+    web_enabled: bool = False,
 ) -> MCPServer:
     """Build the MCP server for `manager`, with all six SPEC.md tools registered.
 
@@ -892,12 +920,14 @@ def build_server(
     -- so Claude Code and Codex see identical routing -- and `list_workers`'
     structured output. `models_http`, when given, is a plain `httpx.AsyncClient`
     used only for the public, keyless OpenRouter `/endpoints/zdr` listing.
+    `web_enabled` hides any `mode: "web"` role from both the dispatch
+    description and `list_workers` unless true.
     """
-    roles = roles or {}
+    roles = _visible_roles(roles or {}, web_enabled)
     role_warnings = role_warnings or []
 
     mcp = MCPServer("anymodel-subagents", version=__version__, instructions=_INSTRUCTIONS)
-    mcp.add_tool(_make_dispatch(manager), description=_dispatch_description(roles))
+    mcp.add_tool(_make_dispatch(manager), description=_dispatch_description(roles, web_enabled))
     mcp.add_tool(_make_wait(manager))
     mcp.add_tool(_make_results(manager))
     mcp.add_tool(_make_cancel(manager))
@@ -981,7 +1011,17 @@ async def _serve() -> None:
     for warning in role_warnings:
         logger.warning("role file skipped: %s", warning)
 
-    manager = JobManager(cfg, state, _default_client_factory(cfg))
+    web_client_factory = None
+    if cfg.web_enabled:
+        # Lazy import: only pull in web_client.py's dependencies when web access
+        # is actually turned on (docs/adr/0001-worker-web-access.md).
+        from anymodel_subagents.web_client import web_client_from_env
+
+        web_client_factory = web_client_from_env
+
+    manager = JobManager(
+        cfg, state, _default_client_factory(cfg), web_client_factory=web_client_factory
+    )
     await manager.start()
 
     models_http = httpx.AsyncClient()
@@ -993,6 +1033,7 @@ async def _serve() -> None:
             default_model=cfg.default_model,
             models_http=models_http,
             server_info=server_info,
+            web_enabled=cfg.web_enabled,
         )
         await mcp.run_stdio_async()
     finally:
