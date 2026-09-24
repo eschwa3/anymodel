@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
-Mode = Literal["read-only", "edit", "edit+bash"]
+Mode = Literal["read-only", "edit", "edit+bash", "web"]
 
 
 class PolicyError(Exception):
@@ -50,6 +50,42 @@ class Workspace(Protocol):
         ...
 
 
+@dataclass(frozen=True)
+class WebHit:
+    """One search result. All fields are provider-controlled, untrusted text."""
+
+    url: str
+    title: str
+    snippets: list[str]
+
+
+@dataclass(frozen=True)
+class WebPage:
+    """One fetched page as markdown. Provider-controlled, untrusted text."""
+
+    url: str
+    title: str
+    content: str
+
+
+class WebClient(Protocol):
+    """Server-side search/fetch provider (web_client.py). Workers never hold one directly:
+    only the `web` mode's tools call it, and it never sees workspace data.
+
+    Methods raise ToolError with a short, key-free message on any failure.
+    """
+
+    async def search(self, query: str, max_results: int) -> list[WebHit]: ...
+
+    async def fetch(self, url: str) -> WebPage: ...
+
+    def redaction_secrets(self) -> list[str]:
+        """Live key values, for `redact`."""
+        ...
+
+    async def aclose(self) -> None: ...
+
+
 class Tool(Protocol):
     name: str
     #: OpenAI function-calling schema: {"type": "function", "function": {name, description, parameters}}
@@ -78,6 +114,7 @@ class WorkerResult:
     turns: int
     usage: Usage
     tool_calls: int = 0
+    web_calls: int = 0  # WebSearch/WebFetch calls made (web mode only)
     invalid_tool_calls: int = 0  # unknown tool, unparseable JSON args, schema-invalid args
     changed_files: list[str] = field(default_factory=list)  # normalized, root-relative
     sensitive_changed_files: list[str] = field(default_factory=list)  # subset needing review

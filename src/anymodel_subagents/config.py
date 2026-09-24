@@ -28,6 +28,8 @@ _MIN_MAX_OUTPUT_TOKENS = 256
 _MAX_MAX_OUTPUT_TOKENS = 200_000
 _MIN_WAIT_S = 5.0
 _MAX_WAIT_S = 600.0
+_MIN_WEB_CALLS = 1
+_MAX_WEB_CALLS = 200
 _MIN_TIMEOUT_S = 10.0
 _MAX_TIMEOUT_S = 86400.0
 
@@ -129,6 +131,12 @@ class Config:
     # (default) sends today's request bodies unchanged. Set turns off OpenRouter's default
     # price-weighted load balancing among ZDR-eligible providers, so it can pick a pricier one.
     provider_sort: str | None = None
+    # Web access for `web` mode workers (docs/adr/0001-worker-web-access.md). Off by default;
+    # also needs BRAVE_API_KEY in the server env. Only this file can turn it on.
+    web_enabled: bool = False
+    web_max_calls_per_job: int = 30
+    # Extra domains for the web denylist, merged with the bundled and user denylist files.
+    web_denylist_extra: tuple[str, ...] = ()
 
 
 # Field name -> expected type(s), for validating user-supplied config.yaml values.
@@ -150,6 +158,9 @@ _FIELD_TYPES: dict[str, tuple[type, ...]] = {
     "bash_repo_venv": (bool,),
     "allow_project_roles": (bool,),
     "provider_sort": (str, type(None)),
+    "web_enabled": (bool,),
+    "web_max_calls_per_job": (int,),
+    "web_denylist_extra": (list,),
 }
 
 _KNOWN_FIELDS = {f.name for f in fields(Config)}
@@ -300,6 +311,11 @@ def load_config(path: Path | None = None) -> Config:
                 msg = "config key 'bash_allow' must be a list of strings"
                 raise ValueError(msg)
             values[key] = tuple(value)
+        elif key == "web_denylist_extra":
+            if not all(isinstance(item, str) for item in value):
+                msg = "config key 'web_denylist_extra' must be a list of strings"
+                raise ValueError(msg)
+            values[key] = tuple(value)
         elif key == "provider_sort":
             if value is not None and value not in _VALID_PROVIDER_SORT:
                 # Bound the echoed value: it's attacker/user-controlled config.yaml text and
@@ -347,6 +363,7 @@ def load_config(path: Path | None = None) -> Config:
         max_concurrency=_clamp(cfg.max_concurrency, _MIN_CONCURRENCY, _MAX_CONCURRENCY),
         max_turns=_clamp(cfg.max_turns, _MIN_TURNS, _MAX_TURNS),
         max_live_jobs=_clamp(cfg.max_live_jobs, _MIN_LIVE_JOBS, _MAX_LIVE_JOBS),
+        web_max_calls_per_job=_clamp(cfg.web_max_calls_per_job, _MIN_WEB_CALLS, _MAX_WEB_CALLS),
         max_output_tokens=max_output_tokens,
         max_wait_s=_clamp(cfg.max_wait_s, _MIN_WAIT_S, _MAX_WAIT_S),
         timeout_s=timeout_s,
