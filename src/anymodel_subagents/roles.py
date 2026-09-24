@@ -139,6 +139,18 @@ def _parse_role_file(path: Path, source: RoleSource) -> Role:
     if mode not in _VALID_MODES:
         raise ValueError(f"{path}: invalid or missing 'mode' (must be one of {_VALID_MODES})")
 
+    if source == "project" and mode == "web":
+        # A project-sourced role file lives inside a repository a worker may be
+        # operating on, which can itself be hostile -- see the module
+        # docstring's SECURITY note and docs/adr/0001-worker-web-access.md's
+        # "Config tampering to enable web" row. `mode: web` grants network
+        # egress and a repo-authored system prompt with no workspace tools;
+        # letting a project role declare it (and possibly shadow a bundled/
+        # user role of the same name) would let a hostile repo silently turn
+        # a read-only/edit dispatch into a web-egress one. Rejected here, at
+        # load time, so it never loads and never shadows anything.
+        raise ValueError(f"{path}: project-sourced roles may not declare mode 'web'")
+
     isolation = meta.get("isolation")
     if isolation is not None and isolation not in _VALID_ISOLATION:
         raise ValueError(f"{path}: invalid 'isolation' (must be one of {_VALID_ISOLATION})")

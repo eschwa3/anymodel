@@ -332,6 +332,25 @@ async def test_role_with_web_mode_resolves(tmp_path, monkeypatch):
     assert await _wait_until(lambda: mgr.get(created[0].job_id).status == "completed")
 
 
+async def test_jobs_rejects_project_sourced_web_role_defense_in_depth(tmp_path, monkeypatch):
+    """roles.py already refuses to load a project-sourced role file declaring
+    `mode: web` (see test_roles.py), so a project-sourced `Role` object with
+    `mode == "web"` should never actually reach `_validate_task`. This
+    exercises jobs.py's own defense-in-depth guard directly by monkeypatching
+    the role loader to hand one back anyway.
+    """
+    role = make_role(source="project")
+    stub_roles(monkeypatch, {"web-researcher": role})
+    mgr = make_manager(
+        tmp_path,
+        monkeypatch,
+        cfg=make_cfg(web_enabled=True, allow_project_roles=True),
+        web_client_factory=make_web_client_factory(),
+    )
+    with pytest.raises(ValueError, match="project-sourced role"):
+        await mgr.dispatch([jobs.TaskSpec(prompt="p", cwd="", role="web-researcher")])
+
+
 async def test_web_role_still_rejected_when_disabled(tmp_path, monkeypatch):
     role = make_role()
     stub_roles(monkeypatch, {"web-researcher": role})

@@ -702,6 +702,16 @@ class JobManager:
                 role_obj = await self._resolve_role(spec.role, cwd_path)
             except ValueError as exc:
                 raise ValueError(f"{prefix}: {exc}") from exc
+            # Defense in depth: roles.py already refuses to load a project-sourced
+            # role file declaring `mode: web` (see its module docstring's SECURITY
+            # note), so this should be unreachable. Kept here in case a role
+            # somehow reaches this point with that combination anyway (e.g. a
+            # future loader change) -- a project role must never grant web egress.
+            if role_obj.source == "project" and role_obj.mode == "web":
+                raise ValueError(
+                    f"{prefix}: role {spec.role!r} is a project-sourced role in 'web' mode, "
+                    "which is not allowed"
+                )
 
         mode = spec.mode if spec.mode is not None else (role_obj.mode if role_obj else "read-only")
         if mode not in _VALID_MODES:

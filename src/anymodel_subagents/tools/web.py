@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
+import secrets
 from typing import Any, ClassVar
 from urllib.parse import urlsplit, urlunsplit
 
@@ -24,9 +25,34 @@ _MAX_URL_CHARS = 2048
 
 _SEARCH_OUTPUT_CAP = 12_000
 _FETCH_OUTPUT_CAP = 40_000
+# Hard ceiling on the whole rendered WebFetch envelope (tags + title + content),
+# regardless of what the provider returns for title/content/url.
+_FETCH_TOTAL_CAP = 40_500
+# A single search hit's body (title + snippets) is truncated to this before it is
+# wrapped, so one oversized hit can never blow the overall _SEARCH_OUTPUT_CAP by
+# itself; the outer cap then drops whole trailing hits, never cuts mid-envelope.
+_MAX_HIT_BODY_CHARS = 8_000
+# Budget reserved for the "N more result(s) omitted" trailing marker so appending
+# it never pushes total search output past _SEARCH_OUTPUT_CAP.
+_SEARCH_MARKER_RESERVE = 120
+_MAX_TITLE_CHARS = 300
+_MAX_SOURCE_CHARS = 2048
 
 _CONTROL_CHARS_RE = re.compile(r"[\x00-\x1f\x7f]")
-_ENVELOPE_TAG_RE = re.compile(r"</?web_content", re.IGNORECASE)
+# Matches a real or fuzzy `<web_content`/`</web_content` opening/closing tag: optional
+# whitespace and slash around "web", plus underscore/dot/hyphen/zero-width separators
+# between "web" and "content" (mirrors report.py's REPORT_TAG_RE).
+_ENVELOPE_TAG_RE = re.compile(
+    r"<\s{0,4}/?\s{0,4}web[\s_.\u00ad\u200b\u200c\u200d\u2060\ufeff-]{0,4}content",
+    re.IGNORECASE,
+)
+# Strict LDH (letters/digits/hyphen) host, at least two labels. Applied after IDNA
+# encoding to refuse anything IDNA's nameprep/NFKC step let through unchanged --
+# in particular a literal "%" (typed directly, or folded from a fullwidth "%" by
+# NFKC) that a downstream WHATWG URL parser would then percent-decode, letting a
+# host like "x.webhook%2esite" resolve to the blocked "x.webhook.site". Deliberately
+# excludes "_": no legitimate fetch target needs it.
+_HOST_RE = re.compile(r"[a-z0-9-]+(\.[a-z0-9-]+)+")
 
 # Suffixes matching a host and every subdomain of it (leading dot). Checked in
 # addition to "localhost" itself and the single-label rule below.
@@ -77,20 +103,42 @@ def _escape_attr(value: str) -> str:
 
 
 def _neutralize_envelope_tags(text: str) -> str:
-    """Defang any `<web_content`/`</web_content` a provider tries to inject.
+    """Defang any `<web_content`/`</web_content` (or a fuzzy variant) a provider
+    tries to inject.
 
     Provider text (titles, snippets, page content) is untrusted and must not be
     able to close our envelope early or forge a second one. Matching is
-    case-insensitive; the leading `<` of each match is entity-escaped so the
-    text can no longer parse as a tag, while staying readable.
+    case-insensitive and tolerant of whitespace/zero-width separators; the
+    leading `<` of each match is entity-escaped so the text can no longer parse
+    as a tag, while staying readable.
     """
     return _ENVELOPE_TAG_RE.sub(lambda m: "&lt;" + m.group(0)[1:], text)
 
 
+def _cap(text: str, limit: int) -> str:
+    """Hard character-count cap, no marker -- for fields (title, source url)
+    where a truncation notice isn't needed, just a ceiling on how much
+    provider-controlled text can reach the worker."""
+    return text if len(text) <= limit else text[:limit]
+
+
 def _wrap_envelope(source: str, body: str) -> str:
-    safe_source = _escape_attr(source)
+    """Wrap provider-controlled `body` as labelled, untrusted data.
+
+    Mirrors report.py's `wrap_report`: a fresh random boundary (generated after
+    `body` is known, so `body` cannot forge a matching one) is carried on both
+    the opening and closing tag, so a hostile page cannot close the envelope
+    early or forge a second one even with a tag-like string that survives
+    neutralization.
+    """
+    safe_source = _escape_attr(_cap(source, _MAX_SOURCE_CHARS))
     safe_body = _neutralize_envelope_tags(body)
-    return f'<web_content source="{safe_source}" trust="untrusted">\n{safe_body}\n</web_content>'
+    boundary = secrets.token_hex(8)
+    while boundary in safe_body:
+        boundary = secrets.token_hex(8)
+    opening = f'<web_content boundary="{boundary}" source="{safe_source}" trust="untrusted">'
+    closing = f'</web_content boundary="{boundary}">'
+    return f"{opening}\n{safe_body}\n{closing}"
 
 
 def _truncate(text: str, limit: int) -> str:
@@ -131,20 +179,39 @@ def _validate_max_results(value: Any) -> int:
 
 
 def _format_hit(index: int, hit: WebHit) -> str:
-    title = _neutralize_envelope_tags(hit.title or "(no title)")
+    title = _cap(_neutralize_envelope_tags(hit.title or "(no title)"), _MAX_TITLE_CHARS)
     lines = [f"Title: {title}"]
     for snippet in hit.snippets:
         if isinstance(snippet, str) and snippet:
             lines.append(f"- {_neutralize_envelope_tags(snippet)}")
-    body = "\n".join(lines)
+    # Truncate the hit's own text *before* wrapping: a single oversized hit
+    # (huge snippets) must not itself blow the overall search cap, and cutting
+    # after wrapping could slice through the envelope's closing tag.
+    body = _truncate("\n".join(lines), _MAX_HIT_BODY_CHARS)
     return f"{index}. {_wrap_envelope(hit.url, body)}"
 
 
 def _format_search_results(hits: list[WebHit]) -> str:
+    """Join formatted hits up to `_SEARCH_OUTPUT_CAP`, dropping whole trailing
+    hits (never cutting mid-hit/mid-envelope) once the budget is used up."""
     if not hits:
         return "No results found."
-    text = "\n\n".join(_format_hit(i, hit) for i, hit in enumerate(hits, start=1))
-    return _truncate(text, _SEARCH_OUTPUT_CAP)
+    budget = _SEARCH_OUTPUT_CAP - _SEARCH_MARKER_RESERVE
+    parts: list[str] = []
+    total_len = 0
+    omitted = 0
+    for i, hit in enumerate(hits, start=1):
+        formatted = _format_hit(i, hit)
+        sep_len = 2 if parts else 0
+        if parts and total_len + sep_len + len(formatted) > budget:
+            omitted = len(hits) - len(parts)
+            break
+        parts.append(formatted)
+        total_len += sep_len + len(formatted)
+    text = "\n\n".join(parts)
+    if omitted:
+        text += f"\n\n[output truncated at {_SEARCH_OUTPUT_CAP} characters: {omitted} more result(s) omitted]"
+    return text
 
 
 def _is_ip_literal(host: str) -> bool:
@@ -186,6 +253,13 @@ def validate_web_url(url: str) -> str:
         parts = urlsplit(url)
     except ValueError:
         raise PolicyError("invalid url") from None
+    # Belt-and-braces: refuse a literal "%" anywhere in the authority before we
+    # even look at it. A downstream WHATWG URL parser (the fetch provider's, or
+    # a redirect target) percent-decodes hosts, so "webhook%2esite" -- which our
+    # own parsing here treats as inert opaque bytes -- can resolve to a
+    # completely different, denylisted host on the other end.
+    if "%" in parts.netloc:
+        raise PolicyError("url host must not contain percent-encoding")
     if parts.scheme.lower() != "https":
         raise PolicyError("only https urls are allowed")
     if parts.username is not None or parts.password is not None:
@@ -210,6 +284,14 @@ def validate_web_url(url: str) -> str:
         raise PolicyError("url host could not be encoded") from None
     if not host:
         raise PolicyError("url must have a host")
+    # IDNA's nameprep step includes NFKC normalization, which folds lookalike
+    # characters (e.g. the fullwidth U+FF05 "%") to their ASCII form -- so a
+    # literal "%" can appear in `host` here even though the raw url had none.
+    # Requiring a strict letters/digits/hyphen host after encoding catches that
+    # (and anything else IDNA passed through unchanged) before it can be used
+    # to smuggle a percent-encoded label past this validator.
+    if not _HOST_RE.fullmatch(host):
+        raise PolicyError("url host contains invalid characters")
 
     if _is_ip_literal(host):
         raise PolicyError("IP address literals are not allowed")
@@ -320,10 +402,21 @@ class WebFetch:
             raise PolicyError("fetch refused: blocked domain")
 
         page = await self._client.fetch(fetch_url)
-        title = _neutralize_envelope_tags(page.title or "(no title)")
-        content = _truncate(_neutralize_envelope_tags(page.content), _FETCH_OUTPUT_CAP)
+        title = _cap(_neutralize_envelope_tags(page.title or "(no title)"), _MAX_TITLE_CHARS)
+        source = page.url or fetch_url
+
+        # Cap the *whole* rendered output at _FETCH_TOTAL_CAP regardless of what the
+        # provider returns (title and source are already capped above/in
+        # _wrap_envelope, but content is provider-controlled and could still be
+        # arbitrarily large): measure the envelope's fixed overhead with an empty
+        # content field, then only allow as much content as still fits.
+        skeleton = _wrap_envelope(source, f"Title: {title}\n\n")
+        content_budget = max(_FETCH_TOTAL_CAP - len(skeleton), 0)
+        content = _truncate(
+            _neutralize_envelope_tags(page.content), min(_FETCH_OUTPUT_CAP, content_budget)
+        )
         body = f"Title: {title}\n\n{content}"
-        return _wrap_envelope(page.url or fetch_url, body)
+        return _wrap_envelope(source, body)
 
 
 def web_tools(client: WebClient, denylist: Denylist, *, max_calls: int) -> list[Tool]:

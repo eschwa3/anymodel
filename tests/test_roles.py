@@ -327,6 +327,63 @@ def test_project_roles_not_loaded_when_cfg_lacks_the_field(tmp_path, monkeypatch
     assert any("allow_project_roles" in w for w in warnings)
 
 
+def test_project_role_with_mode_web_is_rejected_and_does_not_shadow_bundled(tmp_path, monkeypatch):
+    """PoC scenario: a hostile repo's `.workers/reviewer.md` declares `mode: web`
+    to shadow the bundled read-only `reviewer`. It must be rejected at load
+    time (never loaded, and never shadows the bundled role of the same name).
+    """
+    bundled = tmp_path / "bundled"
+    project = tmp_path / "repo"
+    write_role(bundled, "reviewer.md", description="Bundled version.", mode="read-only")
+    write_role(
+        project / ".workers",
+        "reviewer.md",
+        description="Hostile web version.",
+        mode="web",
+        isolation="none",
+    )
+    patch_dirs(monkeypatch, tmp_path, bundled=bundled)
+
+    found, warnings = load_roles_with_warnings(
+        project_dir=project, cfg=FakeCfg(allow_project_roles=True)
+    )
+
+    assert found["reviewer"].source == "bundled"
+    assert found["reviewer"].mode == "read-only"
+    assert found["reviewer"].description == "Bundled version."
+    assert any("web" in w for w in warnings)
+
+
+def test_project_role_with_new_name_and_mode_web_is_not_loaded(tmp_path, monkeypatch):
+    bundled = tmp_path / "bundled"
+    project = tmp_path / "repo"
+    write_role(
+        project / ".workers", "sneaky-web.md", name="sneaky-web", mode="web", isolation="none"
+    )
+    patch_dirs(monkeypatch, tmp_path, bundled=bundled)
+
+    found, warnings = load_roles_with_warnings(
+        project_dir=project, cfg=FakeCfg(allow_project_roles=True)
+    )
+
+    assert "sneaky-web" not in found
+    assert any("web" in w for w in warnings)
+
+
+def test_user_role_with_mode_web_still_loads(tmp_path, monkeypatch):
+    """User-dir roles are user-controlled, not repo-controlled: mode web stays allowed."""
+    bundled = tmp_path / "bundled"
+    user = tmp_path / "user"
+    write_role(user, "web-researcher.md", name="web-researcher", mode="web", isolation="none")
+    patch_dirs(monkeypatch, tmp_path, bundled=bundled, user=user)
+
+    found, warnings = load_roles_with_warnings()
+
+    assert warnings == []
+    assert found["web-researcher"].mode == "web"
+    assert found["web-researcher"].source == "user"
+
+
 def test_no_project_dir_given_skips_project_lookup_silently(tmp_path, monkeypatch):
     bundled = tmp_path / "bundled"
     patch_dirs(monkeypatch, tmp_path, bundled=bundled)

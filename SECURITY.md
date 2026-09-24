@@ -249,7 +249,9 @@ Read it before pointing a worker at anything you care about.
   controls what a worker fetches or searches for can register a fresh
   domain the list has never seen; the list stops casual/known sinks, not a
   targeted one. It also only ever applies to `WebFetch` URLs, not to what a
-  `WebSearch` query itself contains.
+  `WebSearch` query itself contains. It checks only the first URL: the
+  fetch provider follows redirects on its side, so an open redirector on an
+  allowed site reaches a denied one.
 - **Third-party retention of web queries and pages is real, and outside
   OpenRouter's ZDR.** OpenRouter's `zdr: true` covers only the chat
   completions call; it says nothing about Brave or Jina. Per each

@@ -43,7 +43,17 @@ from __future__ import annotations
 
 import importlib.resources
 import ipaddress
+import re
 from collections.abc import Iterable
+
+# Strict LDH (letters/digits/hyphen) host, at least two labels -- applied after
+# IDNA encoding. Mirrors tools/web.py's _HOST_RE: refuses a literal "%" (typed
+# directly, or folded from a fullwidth "%" by IDNA's NFKC normalization) so a
+# host like "x.webhook%2esite" can't sneak into the denylist, or slip past
+# is_blocked() as an unrecognized-and-therefore-allowed host -- normalization
+# failure is fail-closed (blocked), so this makes is_blocked() correctly block
+# such lookalikes instead of comparing a nonsense string that matches nothing.
+_HOST_RE = re.compile(r"[a-z0-9-]+(\.[a-z0-9-]+)+")
 
 
 def _normalize_host(raw: str) -> str:
@@ -88,7 +98,10 @@ def _normalize_host(raw: str) -> str:
         ascii_domain = work.encode("idna").decode("ascii")
     except UnicodeError as exc:
         raise ValueError(f"invalid domain: {exc}") from exc
-    return ascii_domain.lower()
+    ascii_domain = ascii_domain.lower()
+    if not _HOST_RE.fullmatch(ascii_domain):
+        raise ValueError("domain contains invalid characters")
+    return ascii_domain
 
 
 def parse(text: str) -> list[str]:

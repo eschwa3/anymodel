@@ -175,6 +175,41 @@ def test_is_blocked_allows_ordinary_unlisted_host() -> None:
 
 
 # ---------------------------------------------------------------------------
+# H1 regression: percent-encoded hosts fail closed (blocked), and are refused
+# as denylist entries -- see tools/web.py's matching _HOST_RE for the URL side.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "x.webhook%2Esite",
+        "webhook.site%2E",
+        "127.0.0.1%2E",
+        "foo.localhost%2E",
+        "x.webhook％2Esite",  # fullwidth percent, NFKC-folds to '%'
+        "metadata.google%2einternal",
+    ],
+)
+def test_is_blocked_fails_closed_on_percent_encoded_host(host: str) -> None:
+    dl = Denylist(["webhook.site"])
+    assert dl.is_blocked(host) is True
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "x.webhook%2esite",
+        "webhook%2esite.com",
+        "x.webhook％2esite",
+    ],
+)
+def test_denylist_constructor_rejects_percent_encoded_entry(entry: str) -> None:
+    with pytest.raises(ValueError, match="invalid denylist entry"):
+        Denylist([entry])
+
+
+# ---------------------------------------------------------------------------
 # Bundled file
 # ---------------------------------------------------------------------------
 
