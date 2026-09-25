@@ -406,3 +406,107 @@ def test_repr_never_leaks_key() -> None:
         assert FAKE_JINA_KEY not in repr(client)
     finally:
         await_close(client)
+
+
+# --------------------------------------------------------------------------- plan fallback / 429 retry
+
+BRAVE_WEB_URL = "https://api.search.brave.com/res/v1/web/search"
+
+
+def _not_in_plan() -> httpx.Response:
+    return httpx.Response(
+        400,
+        json={
+            "type": "ErrorResponse",
+            "error": {"status": 400, "code": "OPTION_NOT_IN_PLAN", "detail": "not in plan"},
+        },
+    )
+
+
+def _brave_web_ok() -> httpx.Response:
+    return httpx.Response(
+        200,
+        json={
+            "web": {
+                "results": [
+                    {"url": "https://example.com/w", "title": "W", "description": "desc"},
+                    {"url": "http://insecure.example/", "title": "X", "description": "skip"},
+                ]
+            }
+        },
+    )
+
+
+@pytest.fixture(autouse=True)
+def _no_retry_delay(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("anymodel_subagents.web_client._RATE_LIMIT_RETRY_S", 0)
+
+
+@respx.mock
+async def test_search_falls_back_to_web_search_when_llm_context_not_in_plan():
+    llm = respx.get(BRAVE_URL).mock(return_value=_not_in_plan())
+    web = respx.get(BRAVE_WEB_URL).mock(return_value=_brave_web_ok())
+    client = BraveJinaClient(FAKE_BRAVE_KEY)
+    try:
+        hits = await client.search("q", 3)
+        assert hits == [WebHit(url="https://example.com/w", title="W", snippets=["desc"])]
+        await client.search("q2", 3)
+    finally:
+        await client.aclose()
+    assert llm.call_count == 1  # the fallback sticks: no second LLM Context attempt
+    assert web.call_count == 2
+    req = web.calls.last.request
+    assert req.headers["X-Subscription-Token"] == FAKE_BRAVE_KEY
+    assert req.url.params["count"] == "3"
+    assert req.url.params["text_decorations"] == "false"
+
+
+@respx.mock
+async def test_search_other_400_does_not_fall_back():
+    respx.get(BRAVE_URL).mock(
+        return_value=httpx.Response(400, json={"error": {"code": "VALIDATION"}})
+    )
+    web = respx.get(BRAVE_WEB_URL).mock(return_value=_brave_web_ok())
+    client = BraveJinaClient(FAKE_BRAVE_KEY)
+    try:
+        with pytest.raises(ToolError, match="HTTP 400"):
+            await client.search("q", 3)
+    finally:
+        await client.aclose()
+    assert web.call_count == 0
+
+
+@respx.mock
+async def test_search_retries_once_on_429():
+    route = respx.get(BRAVE_URL).mock(side_effect=[httpx.Response(429), _brave_ok()])
+    client = BraveJinaClient(FAKE_BRAVE_KEY)
+    try:
+        hits = await client.search("q", 3)
+    finally:
+        await client.aclose()
+    assert route.call_count == 2
+    assert len(hits) == 1
+
+
+@respx.mock
+async def test_search_gives_up_after_second_429():
+    route = respx.get(BRAVE_URL).mock(return_value=httpx.Response(429))
+    client = BraveJinaClient(FAKE_BRAVE_KEY)
+    try:
+        with pytest.raises(ToolError, match="rate limited"):
+            await client.search("q", 3)
+    finally:
+        await client.aclose()
+    assert route.call_count == 2
+
+
+@respx.mock
+async def test_fetch_retries_once_on_429():
+    route = respx.post(JINA_URL).mock(side_effect=[httpx.Response(429), _jina_ok()])
+    client = BraveJinaClient(FAKE_BRAVE_KEY)
+    try:
+        page = await client.fetch("https://example.com/a")
+    finally:
+        await client.aclose()
+    assert route.call_count == 2
+    assert page.content == "body"

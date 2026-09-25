@@ -124,7 +124,12 @@ never change any of this.
   `JINA_API_KEY` is optional; `WebFetch` falls back to keyless Jina Reader
   at a lower rate limit when it's unset. When `web_enabled` is `false`, or a
   web-mode task is dispatched with no Brave key present, dispatch fails
-  validation instead of silently running some other mode.
+  validation instead of silently running some other mode. `WebSearch` uses
+  Brave's LLM Context endpoint (ranked page excerpts); on plans without it
+  (the legacy Free plan), it falls back to Brave web search, which returns
+  one short description per result. The Free plan allows 1 request/second:
+  a rate-limited call is retried once, and parallel web workers may still
+  see "rate limited" errors.
 - `web_max_calls_per_job` (default `30`, clamped `1..200`) caps
   `WebSearch`/`WebFetch` calls per job; see the table above.
 - `web_denylist_extra` (default `[]`) adds domains to the launch denylist
