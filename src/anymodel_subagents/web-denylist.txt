@@ -20,6 +20,7 @@ mockbin.io
 ptsv2.com
 webhook-test.com
 putsreq.com
+postb.in
 m.pipedream.net
 
 # --- OAST / interaction servers (out-of-band callback / canary services) ----
@@ -73,6 +74,7 @@ localhost.run
 tunnelto.dev
 bore.pub
 localxpose.io
+loclx.io
 
 # --- Anonymous file drops -------------------------------------------------------
 file.io
