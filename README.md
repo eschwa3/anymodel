@@ -30,7 +30,8 @@ timings, costs and findings are the recorded ones.
 
 Paste your OpenRouter key when prompted (it goes to your OS keychain). That's
 it: the bundled `delegate` skill now routes delegation to workers, and
-`/swarm <task>` fans a task out by hand. **Codex CLI:** see
+`/swarm <task>` fans a task out by hand (plus `/web-search` and `/web-extract`
+once [web research](#web-research-optional) is on). **Codex CLI:** see
 [below](#codex-cli).
 
 Then, inside any git repository:
@@ -149,6 +150,9 @@ Turn it on in two steps:
 
 > Use a web-researcher: what changed in httpx 0.28? Cite sources.
 
+Or directly: `/web-search <question>` for a quick cited fact, and
+`/web-extract <url> <what to pull out>` to lift content from a page.
+
 Web queries leave OpenRouter's ZDR: Brave keeps them up to 90 days for
 billing, and Jina pages are fetched with do-not-track (not cached or logged).
 Details: [SECURITY.md](SECURITY.md), [ADR 0001](docs/adr/0001-worker-web-access.md).
@@ -223,7 +227,8 @@ All keys, roles and the state directory: [`docs/configuration.md`](docs/configur
 
 Roles ship as Markdown with native-subagent frontmatter: `reviewer` and
 `researcher` (read-only), `codegen` and `test-writer` (edit+bash in a
-worktree), and `web-researcher` (web only, when enabled). Add your own in the
+worktree), and `web-searcher`, `web-extractor`, `web-researcher` (web only,
+when enabled). Add your own in the
 user config dir.
 
 </details>

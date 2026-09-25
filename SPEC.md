@@ -81,7 +81,7 @@ max_turns: 25
 <system prompt>
 ```
 
-Ships with `reviewer`, `researcher`, `codegen` (edit, worktree), `test-writer`, `web-researcher` (`web`, listed only when web access is enabled). Search order (later overrides earlier by `name`): bundled → user config dir → project `.workers/` (project roles load only when the config sets `allow_project_roles: true`). Role list is rendered into the `dispatch` tool description so both orchestrators see identical routing; CLAUDE.md/AGENTS.md shrink to one policy line ("delegate X/Y/Z to workers"). `model` override allowed per task. Multi-model consensus = dispatch the same prompt under N models.
+Ships with `reviewer`, `researcher`, `codegen` (edit, worktree), `test-writer`, `web-searcher`, `web-extractor`, `web-researcher` (`web`, listed only when web access is enabled). Search order (later overrides earlier by `name`): bundled → user config dir → project `.workers/` (project roles load only when the config sets `allow_project_roles: true`). Role list is rendered into the `dispatch` tool description so both orchestrators see identical routing; CLAUDE.md/AGENTS.md shrink to one policy line ("delegate X/Y/Z to workers"). `model` override allowed per task. Multi-model consensus = dispatch the same prompt under N models.
 
 ## Packaging
 

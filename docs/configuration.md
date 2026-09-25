@@ -41,7 +41,7 @@ applied.
 | `bash_repo_venv` | bool | `true` | For edit+bash jobs, expose the source repository's `.venv` read-only inside the sandbox. See "Bash settings" below |
 | `allow_project_roles` | bool | `false` | Whether a project's own `.workers/` role files are honored. See "Roles" below |
 | `provider_sort` | string or `null` | `null` | OpenRouter provider sort: one of `throughput`, `latency`, `price`, or `null` (off). Setting it turns off OpenRouter's default price-weighted load balancing among ZDR-eligible providers, so it can pick a pricier one; leave it `null` unless you want that trade-off |
-| `web_enabled` | bool | `false` | Master switch for `mode: web` (the `web-researcher` role). See "Web settings" below |
+| `web_enabled` | bool | `false` | Master switch for `mode: web` (the `web-searcher`, `web-extractor` and `web-researcher` roles). See "Web settings" below |
 | `web_max_calls_per_job` | int (1-200) | `30` | Cap on `WebSearch`/`WebFetch` calls in a single web job. Over the cap, the tool returns an error and the worker finishes with what it has |
 | `web_denylist_extra` | list of strings | `[]` | Extra domains merged into the launch denylist. See "Web settings" below |
 

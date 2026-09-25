@@ -427,7 +427,15 @@ def test_real_bundled_roles_all_parse_without_warnings(tmp_path, monkeypatch):
     found, warnings = load_roles_with_warnings()
 
     assert warnings == []
-    assert set(found) == {"researcher", "reviewer", "codegen", "test-writer", "web-researcher"}
+    assert set(found) == {
+        "researcher",
+        "reviewer",
+        "codegen",
+        "test-writer",
+        "web-researcher",
+        "web-searcher",
+        "web-extractor",
+    }
     assert found["researcher"].mode == "read-only"
     assert found["reviewer"].mode == "read-only"
     assert found["codegen"].mode == "edit+bash"
@@ -436,6 +444,9 @@ def test_real_bundled_roles_all_parse_without_warnings(tmp_path, monkeypatch):
     assert found["test-writer"].isolation == "worktree"
     assert found["web-researcher"].mode == "web"
     assert found["web-researcher"].isolation == "none"
+    for name in ("web-searcher", "web-extractor"):
+        assert found[name].mode == "web"
+        assert found[name].isolation == "none"
     # Defaults chosen from bake-off run 20260918-183148 (see bakeoff/README.md).
     assert {name: role.model for name, role in found.items()} == {
         "researcher": "deepseek/deepseek-v4.1-flash",
@@ -443,6 +454,8 @@ def test_real_bundled_roles_all_parse_without_warnings(tmp_path, monkeypatch):
         "test-writer": "deepseek/deepseek-v4.1-flash",
         "codegen": "z-ai/glm-5.3-flash",
         "web-researcher": "deepseek/deepseek-v4.1-flash",
+        "web-searcher": "deepseek/deepseek-v4.1-flash",
+        "web-extractor": "deepseek/deepseek-v4.1-flash",
     }
     for role in found.values():
         assert role.source == "bundled"

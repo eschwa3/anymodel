@@ -56,7 +56,7 @@ the maintainer.
   isn't on PyPI yet; see below).
 - The `delegate` skill, which tells Claude Code when to fan work out to
   workers instead of doing it inline.
-- `/swarm` and `/workers-usage` commands.
+- `/swarm`, `/workers-usage`, `/web-search` and `/web-extract` commands.
 
 ## Future default: PyPI
 
