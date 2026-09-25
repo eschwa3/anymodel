@@ -295,9 +295,8 @@ def _parse_brave_hits(data: Any) -> list[WebHit]:
 def _parse_jina_page(data: Any, fallback_url: str) -> WebPage:
     """Tolerant parse of Jina Reader's response.
 
-    # VERIFY in live smoke test: this shape (`{"data": {"title", "url",
-    # "content"}}`) is our best reading of Jina Reader's JSON-mode docs, not
-    # something we've confirmed against a live response.
+    Shape `{"data": {"title", "url", "content"}}`, confirmed against a live
+    keyless response on 2026-09-25.
     """
     payload = data.get("data") if isinstance(data, dict) else None
     if not isinstance(payload, dict):
