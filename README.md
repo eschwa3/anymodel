@@ -177,7 +177,7 @@ Threat model and reporting: [SECURITY.md](SECURITY.md). Design:
 Codex has no plugin system; register the plain stdio MCP server:
 
 ```bash
-codex mcp add anymodel -- uvx --from git+https://github.com/eschwa3/anymodel@v1.1.0 anymodel-subagents
+codex mcp add anymodel -- uvx --from git+https://github.com/eschwa3/anymodel@v1.1.1 anymodel-subagents
 ```
 
 Then edit the block this wrote to `~/.codex/config.toml` so the key is
@@ -186,7 +186,7 @@ forwarded by name, never written to the file:
 ```toml
 [mcp_servers.anymodel]
 command = "uvx"
-args = ["--from", "git+https://github.com/eschwa3/anymodel@v1.1.0", "anymodel-subagents"]
+args = ["--from", "git+https://github.com/eschwa3/anymodel@v1.1.1", "anymodel-subagents"]
 env_vars = ["OPENROUTER_API_KEY"]
 startup_timeout_sec = 60   # the first uvx start builds the environment; Codex's default is 10 s
 tool_timeout_sec = 120

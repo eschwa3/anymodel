@@ -10,7 +10,7 @@ network_access = false
 
 [mcp_servers.anymodel]
 command = "uvx"
-args = ["--from", "git+https://github.com/eschwa3/anymodel@v1.1.0", "anymodel-subagents"]
+args = ["--from", "git+https://github.com/eschwa3/anymodel@v1.1.1", "anymodel-subagents"]
 startup_timeout_sec = 60
 env_vars = ["OPENROUTER_API_KEY"]
 env = { ANYMODEL_CONFIG = "~/.config/anymodel-subagents/config-codex.yaml" }
