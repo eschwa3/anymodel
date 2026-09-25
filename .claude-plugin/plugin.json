@@ -1,7 +1,7 @@
 {
   "name": "anymodel-subagents",
   "description": "Subagents for Claude Code that run on outside models (OpenRouter first). Push token-heavy reading, searching, editing and test-writing to cheap models; keep this session for architecture and review.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": {
     "name": "Eric Schwartz"
   },
@@ -12,7 +12,7 @@
   "mcpServers": {
     "anymodel": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/eschwa3/anymodel@v1.0.0", "anymodel-subagents"],
+      "args": ["--from", "git+https://github.com/eschwa3/anymodel@v1.1.0", "anymodel-subagents"],
       "env": {
         "OPENROUTER_API_KEY": "${user_config.openrouter_api_key}",
         "ANYMODEL_STATE_DIR": "${CLAUDE_PLUGIN_DATA}",

@@ -9,29 +9,29 @@ macOS and Linux only; on Windows, use WSL2 (the server refuses to start on
 native Windows).
 
 ```bash
-codex mcp add anymodel -- uvx --from git+https://github.com/eschwa3/anymodel@v1.0.0 anymodel-subagents
+codex mcp add anymodel -- uvx --from git+https://github.com/eschwa3/anymodel@v1.1.0 anymodel-subagents
 ```
 
-The `@v1.0.0` tag pin is deliberate, not cosmetic: an unpinned
+The `@v1.1.0` tag pin is deliberate, not cosmetic: an unpinned
 `git+https://...` reference resolves to whatever the default branch's HEAD
 is *at install time*, so the same command run today and next month (or by
 two different people) could silently fetch different, unreviewed code. Use
 the current tag from this repo's releases page — never a bare branch name.
 
 (Once the package is on PyPI, this becomes
-`codex mcp add anymodel -- uvx anymodel-subagents==1.0.0`, pinned the same
+`codex mcp add anymodel -- uvx anymodel-subagents==1.1.0`, pinned the same
 way by an exact version instead of a tag.)
 
 `codex mcp add`'s `--env KEY=VALUE` flag only writes a literal value into
 `~/.codex/config.toml`. To avoid putting your OpenRouter key in a config file,
 add the server with `codex mcp add` and then hand-edit the resulting block to
 forward the variable **by name** from your shell environment instead of
-writing its value — keeping the `@v1.0.0` pin in `args`:
+writing its value — keeping the `@v1.1.0` pin in `args`:
 
 ```toml
 [mcp_servers.anymodel]
 command = "uvx"
-args = ["--from", "git+https://github.com/eschwa3/anymodel@v1.0.0", "anymodel-subagents"]
+args = ["--from", "git+https://github.com/eschwa3/anymodel@v1.1.0", "anymodel-subagents"]
 env_vars = ["OPENROUTER_API_KEY"]
 startup_timeout_sec = 60
 tool_timeout_sec = 120
@@ -63,7 +63,7 @@ and a Brave key is present. Forward it the same way as
 above:
 
 ```bash
-codex mcp add anymodel --env BRAVE_API_KEY=<your-brave-key> -- uvx --from git+https://github.com/eschwa3/anymodel@v1.0.0 anymodel-subagents
+codex mcp add anymodel --env BRAVE_API_KEY=<your-brave-key> -- uvx --from git+https://github.com/eschwa3/anymodel@v1.1.0 anymodel-subagents
 ```
 
 ```toml
@@ -84,7 +84,7 @@ own file — the variable is a path, not a secret, so a literal `env` entry is f
 ```toml
 [mcp_servers.anymodel]
 command = "uvx"
-args = ["--from", "git+https://github.com/eschwa3/anymodel@v1.0.0", "anymodel-subagents"]
+args = ["--from", "git+https://github.com/eschwa3/anymodel@v1.1.0", "anymodel-subagents"]
 env_vars = ["OPENROUTER_API_KEY"]
 env = { ANYMODEL_CONFIG = "~/.config/anymodel-subagents/config-codex.yaml" }
 startup_timeout_sec = 60
