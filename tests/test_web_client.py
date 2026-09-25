@@ -113,6 +113,7 @@ async def test_search_request_shape():
     assert params["maximum_number_of_urls"] == "3"
     assert params["count"] == "3"
     assert params["maximum_number_of_tokens"] == "4096"
+    assert request.extensions["timeout"]["read"] == 15.0
 
 
 @respx.mock
@@ -268,7 +269,9 @@ async def test_fetch_request_shape_no_jina_key():
     request = route.calls[0].request
     assert request.headers["DNT"] == "1"
     assert request.headers["Accept"] == "application/json"
-    assert request.headers["X-Timeout"] == "15"
+    assert request.headers["X-Timeout"] == "30"
+    # Our client waits longer than Jina's render budget so Jina answers first.
+    assert request.extensions["timeout"]["read"] == 45.0
     assert "Authorization" not in request.headers
     assert json.loads(request.content) == {"url": "https://example.com/a"}
 

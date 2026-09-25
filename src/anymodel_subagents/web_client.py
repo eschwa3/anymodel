@@ -26,6 +26,11 @@ _BRAVE_WEB_URL = "https://api.search.brave.com/res/v1/web/search"
 _JINA_URL = "https://r.jina.ai/"
 
 _REQUEST_TIMEOUT_S = 15.0
+# Jina renders the page before answering, and heavy pages (e.g. docs.python.org
+# "What's New") take longer than a search call. Jina's own render budget
+# (`X-Timeout`) sits below ours so Jina gives up and answers first.
+_JINA_RENDER_TIMEOUT_S = 30
+_FETCH_TIMEOUT_S = 45.0
 _MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 _MAX_TOKENS = 4096
 _RATE_LIMIT_RETRY_S = 1.1
@@ -112,6 +117,7 @@ class BraveJinaClient:
         too_large_msg: str,
         timeout_msg: str,
         network_msg: str,
+        timeout_s: float = _REQUEST_TIMEOUT_S,
     ) -> tuple[int, bytes]:
         """POST/GET `url`, aborting once the body exceeds `_MAX_RESPONSE_BYTES`.
 
@@ -130,6 +136,7 @@ class BraveJinaClient:
                 too_large_msg=too_large_msg,
                 timeout_msg=timeout_msg,
                 network_msg=network_msg,
+                timeout_s=timeout_s,
             )
             if status != 429 or attempt == 2:
                 break
@@ -147,10 +154,11 @@ class BraveJinaClient:
         too_large_msg: str,
         timeout_msg: str,
         network_msg: str,
+        timeout_s: float,
     ) -> tuple[int, bytes]:
         try:
             async with self._client.stream(
-                method, url, params=params, json=json_body, headers=headers
+                method, url, params=params, json=json_body, headers=headers, timeout=timeout_s
             ) as resp:
                 body = bytearray()
                 async for chunk in resp.aiter_bytes():
@@ -198,7 +206,7 @@ class BraveJinaClient:
         headers = {
             "Accept": "application/json",
             "DNT": "1",
-            "X-Timeout": "15",
+            "X-Timeout": str(_JINA_RENDER_TIMEOUT_S),
         }
         if self.__jina_key:
             headers["Authorization"] = f"Bearer {self.__jina_key}"
@@ -210,6 +218,7 @@ class BraveJinaClient:
             too_large_msg="fetch failed: response too large",
             timeout_msg="fetch failed: request timed out",
             network_msg="fetch failed: network error",
+            timeout_s=_FETCH_TIMEOUT_S,
         )
         if status in (401, 403):
             raise ToolError("fetch provider rejected the API key")
