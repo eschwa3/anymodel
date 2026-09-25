@@ -124,6 +124,35 @@ writing, several modules at once.
 | Shell | Claude Code's permission rules | OS sandbox, no network |
 | Speed on the benchmark | 6–8 min | 16–18 min |
 
+## Web research (optional)
+
+Docs lookups, changelogs, CVEs, "how does library X handle Y": hand them to a
+cheap `web-researcher` worker instead of spending your Claude plan on page
+text. You get back a short answer with a source URL for every claim.
+
+- **Search and read:** Brave Search finds pages, Jina Reader turns them into
+  clean markdown.
+- **Walled off from your code:** a web worker has no files, no shell and no
+  repo. To apply what it found, your orchestrator hands the facts to a code
+  worker.
+- **Guard rails:** https only, no internal hosts, a per-job call cap, a
+  denylist of known data-drop sites, and every page returned as untrusted
+  data.
+
+Turn it on in two steps:
+
+1. Get a [Brave Search API](https://brave.com/search/api/) key; the Search
+   plan includes $5 of free usage a month. A [Jina Reader](https://jina.ai/reader/)
+   key is optional. In Claude Code, enter them under `/plugin` →
+   anymodel-subagents ([Codex](docs/codex.md)).
+2. Add `web_enabled: true` to your [config](#configure) and restart.
+
+> Use a web-researcher: what changed in httpx 0.28? Cite sources.
+
+Web queries leave OpenRouter's ZDR: Brave keeps them up to 90 days for
+billing, and Jina pages are fetched with do-not-track (not cached or logged).
+Details: [SECURITY.md](SECURITY.md), [ADR 0001](docs/adr/0001-worker-web-access.md).
+
 ## Security
 
 - ZDR on every request: `provider: {zdr: true, data_collection: "deny",
@@ -175,6 +204,7 @@ max_wait_s: 600           # Claude Code: one long wait per batch (leave 45 under
 budget_per_day_usd: 5.00  # spend backstop, off by default
 # timeout_s: 1800         # per-job wall clock, default 900; raise for slow test suites
 # provider_sort: throughput  # fastest ZDR provider, possibly pricier; default off
+# web_enabled: true       # web-researcher role; needs a Brave key (see Web research)
 ```
 
 All keys, roles and the state directory: [`docs/configuration.md`](docs/configuration.md).
@@ -193,7 +223,8 @@ All keys, roles and the state directory: [`docs/configuration.md`](docs/configur
 
 Roles ship as Markdown with native-subagent frontmatter: `reviewer` and
 `researcher` (read-only), `codegen` and `test-writer` (edit+bash in a
-worktree). Add your own in the user config dir.
+worktree), and `web-researcher` (web only, when enabled). Add your own in the
+user config dir.
 
 </details>
 

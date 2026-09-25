@@ -9,7 +9,7 @@ Design and rationale: [SPEC.md](SPEC.md). Threat model: [SECURITY.md](SECURITY.m
 
 | Path | What |
 |---|---|
-| `src/anymodel_subaßßents/types.py` | Shared contracts (`Tool`, `Workspace`, `WorkerResult`). Change deliberately; everything builds on it. |
+| `src/anymodel_subagents/types.py` | Shared contracts (`Tool`, `Workspace`, `WorkerResult`). Change deliberately; everything builds on it. |
 | `engine.py`, `openrouter.py`, `redact.py`, `ledger.py` | Worker loop, OpenRouter client (ZDR prefs on every request), secret redaction, cost ledger. |
 | `tools/workspace.py`, `tools/files.py` | Path confinement + deny / write-deny / sensitive tables; Read, Grep, Glob, Edit, Write. |
 | `tools/bash.py`, `tools/sandbox.py` | Command allowlist (second layer) and the OS sandbox (Seatbelt / bwrap — the real boundary). |
