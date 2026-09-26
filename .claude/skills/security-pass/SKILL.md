@@ -1,6 +1,6 @@
 ---
 name: security-pass
-description: Run the review → fix → verify security loop on anymodel-subagents. Use after changes to tools/, the sandbox, jobs, worktree, server, engine, or redaction; before a release; or when Eric asks for a security review of this project.
+description: Run the review → fix → verify security loop on anymodel-subagents. Use after changes to tools/, the sandbox, jobs, worktree, server, engine, or redaction; before a release; or when the user asks for a security review of this project.
 ---
 
 # Security pass

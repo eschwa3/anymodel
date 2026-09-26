@@ -1,14 +1,14 @@
 ---
 name: bakeoff
-description: Run, read, or extend the model bake-off that picks worker models per role. Use when Eric mentions the bake-off, model defaults, comparing worker models, or pastes/points at bakeoff/runs results.
+description: Run, read, or extend the model bake-off that picks worker models per role. Use when the user mentions the bake-off, model defaults, comparing worker models, or pastes/points at bakeoff/runs results.
 ---
 
 # Bake-off
 
-Eric runs it (it needs his OpenRouter key, which you never handle); you prepare the command and
-analyze results.
+The maintainer runs it (it needs their OpenRouter key, which you never handle); you prepare the
+command and analyze results.
 
-## Commands for Eric
+## Commands for the maintainer
 
 ```bash
 uv run python bakeoff/run.py --suite real --models <a,b,c> --repeats 3 --yes

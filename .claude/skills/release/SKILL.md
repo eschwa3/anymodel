@@ -6,7 +6,7 @@ description: Cut a tagged release of anymodel-subagents. Use when asked to relea
 # Releasing anymodel-subagents
 
 Users install from a pinned tag (`uvx --from git+https://github.com/eschwa3/anymodel@vX.Y.Z`), so
-the version string must move in lockstep everywhere. Confirm with Eric before tagging or pushing.
+the version string must move in lockstep everywhere. Confirm with the maintainer before tagging or pushing.
 
 1. Green first: `uv run pytest -q`, `uv run pytest bakeoff/tests -q`,
    `uv run ruff check src tests bakeoff`, `uv run ruff format --check src tests`,

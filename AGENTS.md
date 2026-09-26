@@ -33,7 +33,7 @@ uv run python bakeoff/run.py --suite real --dry-run --models fake-a   # offline 
 Python 3.12+ only (3.11 hangs when a task is cancelled during asyncio subprocess creation).
 The MCP SDK is 2.x: the server class is `mcp.server.mcpserver.MCPServer`, not `FastMCP`.
 
-## Security invariants — do not weaken without an explicit decision from Eric
+## Security invariants — do not weaken without an explicit decision from the maintainer
 
 1. No MCP tool may mutate configuration, read arbitrary files, or run commands. `config.yaml` is
    user-edited only; nothing in the codebase writes it.
@@ -65,9 +65,9 @@ needs a regression test, and anything that alters a boundary gets an adversarial
 - Tests: pytest + pytest-asyncio (auto mode), `respx` for HTTP, real git in `tmp_path` repos,
   real `sandbox-exec` tests skipped when no sandbox is available. Use `sandbox.real_toolchain_bin()`
   / `sys.executable`, not the `/usr/bin` xcrun shims.
-- Never make real OpenRouter calls from tests or agents; Eric runs the bake-off himself with his key.
+- Never make real OpenRouter calls from tests or agents; the maintainer runs the bake-off with their own key.
 - Commit messages: imperative subject, body explains why. No AI co-author or "generated with"
-  trailers — Eric is the sole author. Releases are tags (`vX.Y.Z`); the plugin
+  trailers — the maintainer is the sole author. Releases are tags (`vX.Y.Z`); the plugin
   manifest and docs pin the tag — see `.claude/skills/release`.
 
 ## Working as (or with) subagents
