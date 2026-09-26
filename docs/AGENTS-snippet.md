@@ -4,7 +4,9 @@
 Push read-heavy or mechanical work to `anymodel-subagents` workers instead of
 doing it yourself: diff/PR review, codebase research, test writing, and
 boilerplate generation across many files. Keep architecture decisions,
-ambiguous tasks, and final integration for yourself.
+ambiguous tasks, and final integration for yourself. Workers use far less of
+your plan but run about 2–3x slower, so do small edits, anything the user is
+waiting on, and step-by-step dependent work yourself.
 
 **Authorization (keep only if true for this repo):** the repository owner authorizes sending
 this repository's contents to OpenRouter under zero-data-retention routing via anymodel
@@ -33,7 +35,9 @@ in headless runs as an unauthorized export of repository contents.
   `results`), then `git branch -D anymodel/<job_id>`.
 - Report cost (`cost_usd_total`) briefly. On failure, retry once with a
   sharper prompt, then just do it yourself.
-- For external facts (docs, changelogs, CVEs, API behavior), dispatch a
-  `web-researcher` job (only available if the user enabled web access) and
-  chain its findings into a code job's prompt — never paste secrets or
+- For external facts (docs, changelogs, CVEs, API behavior), dispatch a web
+  job (only available if the user enabled web access): `web-searcher` for a
+  quick fact, `web-extractor` to pull content from known URLs,
+  `web-researcher` for open-ended questions. Restate its verified findings in
+  a code job's prompt rather than pasting the report — never paste secrets or
   proprietary code into a web task.

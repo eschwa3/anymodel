@@ -81,7 +81,7 @@ needs a regression test, and anything that alters a boundary gets an adversarial
 
 ## Delegating to anymodel workers
 
-Push read-heavy or mechanical work to anymodel-subagents workers instead of doing it yourself: diff/PR review, codebase research, test writing, and boilerplate generation across many files. Keep architecture decisions, ambiguous tasks, and final integration for yourself.
+Push read-heavy or mechanical work to anymodel-subagents workers instead of doing it yourself: diff/PR review, codebase research, test writing, and boilerplate generation across many files. Keep architecture decisions, ambiguous tasks, and final integration for yourself. Workers use far less of your plan but run about 2–3x slower, so do small edits, anything the user is waiting on, and step-by-step dependent work yourself.
 
 - Write self-contained prompts — a worker sees none of this conversation. Name exact files/dirs, state the deliverable and report format.
 - Pick a role, not a model, unless the user asks for a specific one.

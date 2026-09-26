@@ -44,7 +44,7 @@ prompt is the only thing that can leak through it, so never put secrets,
 credentials, or proprietary code in a web task's prompt.
 
 `plugin.json`'s `mcpServers` entry pins that install to a tagged release
-(`git+https://github.com/eschwa3/anymodel@v1.1.1`) rather than a moving branch
+(`git+https://github.com/eschwa3/anymodel@v1.1.2`) rather than a moving branch
 HEAD, so a plugin install today and one next month run the exact same,
 reviewed code — see SECURITY.md's supply-chain note. New tags are cut only by
 the maintainer.
@@ -63,10 +63,10 @@ the maintainer.
 Today `plugin.json` runs the server from a tagged GitHub release:
 
 ```json
-"args": ["--from", "git+https://github.com/eschwa3/anymodel@v1.1.1", "anymodel-subagents"]
+"args": ["--from", "git+https://github.com/eschwa3/anymodel@v1.1.2", "anymodel-subagents"]
 ```
 
-The `@v1.1.1` pin matters: without it, `uvx --from git+...` resolves to
+The `@v1.1.2` pin matters: without it, `uvx --from git+...` resolves to
 whatever the default branch's HEAD happens to be *at install time*, which
 means two people installing the same plugin on different days (or the same
 person reinstalling later) could silently run different code — including
@@ -78,7 +78,7 @@ then, only use a tagged `git+https://...@vX.Y.Z` reference, never a bare
 branch name or an unpinned repo URL.
 
 Once `anymodel-subagents` is published to PyPI, this collapses to plain
-`uvx anymodel-subagents==1.1.1` (`"command": "uvx"`), which is faster to
+`uvx anymodel-subagents==1.1.2` (`"command": "uvx"`), which is faster to
 start and doesn't require git. Watch the CHANGELOG / releases for when that
 switch lands.
 

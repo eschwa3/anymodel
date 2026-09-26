@@ -17,6 +17,20 @@ under-specified tasks, anything where you'd need several back-and-forth turns
 to pin down what "done" means, and final integration (merging, resolving
 conflicts, deciding what to ship).
 
+Workers trade wall time for usage. In our benchmark (16 small features in a
+Python project, `bakeoff/looptest/`), delegating cut Claude usage to roughly
+35–54 % but took about 2–3x as long (16–18 min vs 6–8 min with native
+subagents), and doing the same small features yourself took 6 minutes and
+less usage than any delegating run. Treat these as rough guidance from one
+benchmark, not thresholds:
+
+- **Delegate** big, read-heavy or mechanical work, especially work that
+  splits into several independent jobs of similar size (a batch is as slow as
+  its slowest job) and that nobody is waiting on interactively.
+- **Do it yourself** when it's a handful of small edits, when the user is
+  waiting on the result, or when each step needs the previous step's output.
+  If you could finish it in a few turns without reading much, don't delegate.
+
 ## Writing a worker prompt
 
 A worker starts with a **fresh context** — it sees none of this conversation,
