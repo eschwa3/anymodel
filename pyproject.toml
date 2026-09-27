@@ -5,7 +5,7 @@ description = "Subagents for Claude Code and Codex CLI that run on any model (Op
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
-authors = [{ name = "Eric Schwartz" }]
+authors = [{ name = "eschwa3" }]
 keywords = ["mcp", "claude-code", "codex", "subagents", "openrouter", "multi-agent", "swarm"]
 dependencies = [
     "httpx>=0.27,<1",

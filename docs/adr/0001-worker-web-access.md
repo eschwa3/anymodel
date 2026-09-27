@@ -2,7 +2,7 @@
 
 - **Status:** Accepted (2026-09-24). Providers: Brave (search) + Jina Reader (fetch); see Research findings
 - **Date:** 2026-09-24
-- **Decider:** Eric Schwartz
+- **Decider:** the maintainer
 - **Touches:** `types.py` (`Mode`), `tools/` (new `web.py`), `jobs.py`, `config.py`, `ledger.py`,
   `redact.py`, `server.py` (dispatch description), `workers/`, `.claude-plugin/plugin.json`,
   `skills/delegate`, SPEC.md, SECURITY.md, docs/configuration.md
@@ -219,7 +219,7 @@ Codex registration docs.
    disabled-web dispatch fails, call cap, untrusted wrapping.
 4. `security-pass` with PoCs: key extraction, exfil via query/URL, denylist bypass (case, IDNA,
    trailing dot, userinfo), injection-driven tool abuse.
-5. Eric runs a live smoke test with his own Brave (and optionally Jina) keys.
+5. The maintainer runs a live smoke test with their own Brave (and optionally Jina) keys.
 
 ## Research findings (2026-09-24)
 
