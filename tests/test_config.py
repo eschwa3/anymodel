@@ -873,6 +873,7 @@ def test_load_config_role_models(tmp_path: Path) -> None:
         "role_models:\n  codegen: 'bad model with spaces'\n",
         "role_models:\n  Codegen: a/b\n",
         "role_models:\n  1: a/b\n",
+        "role_models:\n  '**': a/b\n",
     ],
 )
 def test_load_config_role_models_rejects_bad_values(tmp_path: Path, body: str) -> None:
@@ -880,3 +881,66 @@ def test_load_config_role_models_rejects_bad_values(tmp_path: Path, body: str) -
     path.write_text(body)
     with pytest.raises(ValueError, match="role_models"):
         load_config(path)
+
+
+def test_load_config_role_models_accepts_star(tmp_path: Path) -> None:
+    path = tmp_path / "config.yaml"
+    path.write_text("role_models:\n  '*': z-ai/glm-5.3-flash\n")
+    assert load_config(path).role_models == {"*": "z-ai/glm-5.3-flash"}
+
+
+# ---------------------------------------------------------------------------
+# plugin-settings env vars (ANYMODEL_OPENROUTER_BASE_URL, ANYMODEL_MODEL)
+# ---------------------------------------------------------------------------
+
+
+def test_env_fills_unset_keys_without_a_config_file(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ANYMODEL_OPENROUTER_BASE_URL", "https://eu.openrouter.ai//api/v1")
+    monkeypatch.setenv("ANYMODEL_MODEL", "z-ai/glm-5.3-flash")
+    cfg = load_config(tmp_path / "missing.yaml")
+    assert cfg.openrouter_base_url == "https://eu.openrouter.ai/api/v1"
+    assert cfg.default_model == "z-ai/glm-5.3-flash"
+    assert cfg.role_models == {"*": "z-ai/glm-5.3-flash"}
+
+
+def test_config_file_wins_over_env(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ANYMODEL_OPENROUTER_BASE_URL", "https://eu.openrouter.ai/api/v1")
+    monkeypatch.setenv("ANYMODEL_MODEL", "env/model")
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        "openrouter_base_url: https://us.openrouter.ai/api/v1\n"
+        "default_model: file/default\n"
+        "role_models:\n  codegen: file/codegen\n"
+    )
+    cfg = load_config(path)
+    assert cfg.openrouter_base_url == "https://us.openrouter.ai/api/v1"
+    assert cfg.default_model == "file/default"
+    # Per-role file entries keep their model; the env model covers the rest via "*".
+    assert cfg.role_models == {"codegen": "file/codegen", "*": "env/model"}
+
+
+def test_config_file_star_wins_over_env_model(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ANYMODEL_MODEL", "env/model")
+    path = tmp_path / "config.yaml"
+    path.write_text("role_models:\n  '*': file/star\n")
+    assert load_config(path).role_models == {"*": "file/star"}
+
+
+def test_empty_env_values_are_unset(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ANYMODEL_OPENROUTER_BASE_URL", "")
+    monkeypatch.setenv("ANYMODEL_MODEL", "  ")
+    assert load_config(tmp_path / "missing.yaml") == Config()
+
+
+@pytest.mark.parametrize(
+    ("var", "value"),
+    [
+        ("ANYMODEL_OPENROUTER_BASE_URL", "https://evil.example/api/v1"),
+        ("ANYMODEL_OPENROUTER_BASE_URL", "http://us.openrouter.ai/api/v1"),
+        ("ANYMODEL_MODEL", "bad model"),
+    ],
+)
+def test_invalid_env_values_are_rejected(tmp_path: Path, monkeypatch, var, value) -> None:
+    monkeypatch.setenv(var, value)
+    with pytest.raises(ValueError, match=var):
+        load_config(tmp_path / "missing.yaml")

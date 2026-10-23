@@ -506,3 +506,17 @@ def test_role_models_unknown_role_warns(tmp_path, monkeypatch):
     assert set(found) == {"reviewer"}
     assert len(warnings) == 1
     assert "reviwer" in warnings[0]
+
+
+def test_role_models_star_covers_roles_without_their_own_entry(tmp_path, monkeypatch):
+    bundled = tmp_path / "bundled"
+    write_role(bundled, "reviewer.md")
+    write_role(bundled, "coder.md", name="coder")
+    patch_dirs(monkeypatch, tmp_path, bundled=bundled)
+
+    cfg = FakeCfg(role_models={"*": "all/model", "coder": "coder/model"})
+    found, warnings = load_roles_with_warnings(cfg=cfg)
+
+    assert warnings == []
+    assert found["reviewer"].model == "all/model"
+    assert found["coder"].model == "coder/model"

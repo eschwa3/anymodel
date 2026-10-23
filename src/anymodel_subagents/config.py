@@ -97,6 +97,7 @@ class Config:
     default_model: str = "deepseek/deepseek-v4.1-flash"
     # Role name -> model, overriding the `model:` in that role's file (bundled, user, or
     # project). A task's own `model` still wins. Lets users swap models without copying roles.
+    # The key "*" applies to every role without its own entry.
     role_models: dict[str, str] = field(default_factory=dict)
     max_concurrency: int = 8
     max_turns: int = 40
@@ -264,7 +265,9 @@ def config_path() -> Path:
     return base / _APP_NAME / "config.yaml"
 
 
-def _normalize_openrouter_base_url(value: str) -> str:
+def _normalize_openrouter_base_url(
+    value: str, source: str = "config key 'openrouter_base_url'"
+) -> str:
     """Canonical form of an OpenRouter base URL, or ValueError if it isn't an allowed one.
 
     Tolerates case in scheme/host, repeated slashes, and a trailing slash
@@ -277,10 +280,7 @@ def _normalize_openrouter_base_url(value: str) -> str:
         candidate = f"https://{m.group(2).lower()}{path}"
         if candidate in OPENROUTER_BASE_URLS:
             return candidate
-    msg = (
-        f"config key 'openrouter_base_url' must be one of {OPENROUTER_BASE_URLS}, "
-        f"got {value[:80]!r}"
-    )
+    msg = f"{source} must be one of {OPENROUTER_BASE_URLS}, got {value[:80]!r}"
     raise ValueError(msg)
 
 
@@ -302,6 +302,25 @@ def _is_finite_number(value: float) -> bool:
         return False
 
 
+def _apply_env_defaults(values: dict[str, Any]) -> None:
+    """Fill keys config.yaml left unset from the plugin-settings env vars (see load_config)."""
+    base_url = os.environ.get("ANYMODEL_OPENROUTER_BASE_URL", "").strip()
+    if base_url and "openrouter_base_url" not in values:
+        values["openrouter_base_url"] = _normalize_openrouter_base_url(
+            base_url, "env var ANYMODEL_OPENROUTER_BASE_URL"
+        )
+
+    model = os.environ.get("ANYMODEL_MODEL", "").strip()
+    if not model:
+        return
+    if not _MODEL_RE.match(model):
+        raise ValueError(f"env var ANYMODEL_MODEL is not a valid model id: {model[:40]!r}")
+    values.setdefault("default_model", model)
+    role_models = dict(values.get("role_models", {}))
+    role_models.setdefault("*", model)
+    values["role_models"] = role_models
+
+
 def load_config(path: Path | None = None) -> Config:
     """Load config from `path` (default: `config_path()`).
 
@@ -312,15 +331,17 @@ def load_config(path: Path | None = None) -> Config:
     then is clamped into [10.0, 86400.0]. Budget caps (`budget_per_swarm_usd`,
     `budget_per_day_usd`) accept null, int, or float, and reject anything <= 0
     or non-finite; ints become floats.
+
+    Two environment variables fill in keys the file leaves unset, so the Claude Code
+    plugin's settings (userConfig) can set them: `ANYMODEL_OPENROUTER_BASE_URL` for
+    `openrouter_base_url`, and `ANYMODEL_MODEL` for `default_model` and `role_models["*"]`.
+    Empty values count as unset. The file always wins.
     """
     cfg_path = path if path is not None else config_path()
 
-    if not cfg_path.exists():
-        return Config()
-
-    raw = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+    raw = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) if cfg_path.exists() else None
     if raw is None:
-        return Config()
+        raw = {}
     if not isinstance(raw, dict):
         msg = f"config file must contain a mapping, got {type(raw).__name__}"
         raise ValueError(msg)  # noqa: TRY004 -- ValueError is this module's public contract
@@ -370,7 +391,7 @@ def load_config(path: Path | None = None) -> Config:
             values[key] = value
         elif key == "role_models":
             for name, model in value.items():
-                if not isinstance(name, str) or not _ROLE_NAME_RE.match(name):
+                if not isinstance(name, str) or not (name == "*" or _ROLE_NAME_RE.match(name)):
                     msg = f"config key 'role_models' has an invalid role name: {str(name)[:40]!r}"
                     raise ValueError(msg)
                 if not isinstance(model, str) or not _MODEL_RE.match(model):
@@ -391,6 +412,7 @@ def load_config(path: Path | None = None) -> Config:
         else:
             values[key] = value
 
+    _apply_env_defaults(values)
     cfg = Config(**values)
 
     max_output_tokens = cfg.max_output_tokens

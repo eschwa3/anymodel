@@ -48,6 +48,12 @@ Fields used above (see the Codex MCP docs for the complete set):
 | `command` / `args` | How to launch the server (same as `dispatch`'s underlying process) |
 | `env_vars` | Names of environment variables to forward from Codex's own environment, unmodified |
 | `env` | Literal `KEY = "value"` pairs written directly into config.toml (avoid for secrets) |
+
+To pick a regional OpenRouter endpoint or one model for every role, either
+set `openrouter_base_url` / `role_models` in the server's `config.yaml`, or add
+`ANYMODEL_OPENROUTER_BASE_URL` / `ANYMODEL_MODEL` to `env`, e.g.
+`env = { ANYMODEL_OPENROUTER_BASE_URL = "https://us.openrouter.ai/api/v1", ANYMODEL_MODEL = "z-ai/glm-5.3-flash" }`
+(see [docs/configuration.md](configuration.md)).
 | `startup_timeout_sec` | How long Codex waits for the server to come up. Use **60**: the first `uvx --from git+…` start builds the environment and can exceed the 10 s default, after which the tools are reported as unavailable |
 | `tool_timeout_sec` | How long Codex waits for one tool call to return. Codex kills an MCP tool call at 60 s by default, which is what `max_wait_s`'s 45 s default is sized for — leave `max_wait_s` at 45 under Codex, and raise this to **120** to give `wait` headroom rather than have Codex time out mid-poll |
 

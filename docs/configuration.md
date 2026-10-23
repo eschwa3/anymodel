@@ -22,10 +22,23 @@ block reports `config_path`, `config_found` and the effective `max_wait_s` (also
 logged once at startup). `wait` likewise returns the `timeout_s` it really
 applied.
 
+Two settings can also come from environment variables, which is how the
+Claude Code plugin's settings fields reach the server. Each fills in only a key
+the file leaves unset; an empty value counts as unset, and a value in
+`config.yaml` always wins.
+
+| Variable | Fills | Claude Code plugin setting |
+|---|---|---|
+| `ANYMODEL_OPENROUTER_BASE_URL` | `openrouter_base_url` (same allowed values) | OpenRouter endpoint |
+| `ANYMODEL_MODEL` | `default_model` and `role_models["*"]`: one model for every role | Worker model for all roles |
+
+Per-role entries in `role_models` still apply on top of `ANYMODEL_MODEL`.
+Under Codex, set them in the server's `env` table in `~/.codex/config.toml`.
+
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `default_model` | string | `deepseek/deepseek-v4.1-flash` | Model used when a task sets neither `model` nor `role` |
-| `role_models` | map of role name → model | `{}` | Per-role model, overriding the `model:` in that role's file (bundled, user, or project). A task's own `model` still wins. A name that matches no role is reported in `list_workers` warnings. Example: `role_models: {codegen: z-ai/glm-5.3-flash, reviewer: deepseek/deepseek-v4.1-flash}` |
+| `role_models` | map of role name → model | `{}` | Per-role model, overriding the `model:` in that role's file (bundled, user, or project). The key `"*"` (quote it in YAML) covers every role without its own entry. A task's own `model` still wins. A name that matches no role is reported in `list_workers` warnings. Example: `role_models: {codegen: z-ai/glm-5.3-flash, reviewer: deepseek/deepseek-v4.1-flash}` |
 | `max_concurrency` | int (1-32) | `8` | Global cap on simultaneously running worker jobs |
 | `max_turns` | int (1-200) | `40` | Default per-job turn cap (a task's `max_turns` can lower it, not raise it past the config's clamp) |
 | `timeout_s` | number | `900.0` | Wall-clock timeout per job, in seconds (clamped to 10–86400). A `dispatch` task may pass its own `timeout_s` to shorten this for that task, never to extend it; unrelated to `wait`'s `timeout_s` |

@@ -23,6 +23,22 @@ Retention** in your OpenRouter account's privacy settings
 `provider: {zdr: true, data_collection: "deny"}`, but that only has effect if
 your account-level setting allows ZDR routing in the first place.
 
+## Endpoint and model (optional)
+
+Two optional settings, under `/plugin`, cover the common cases without
+editing a file:
+
+- **OpenRouter endpoint**: leave blank for the global endpoint, or set
+  `https://us.openrouter.ai/api/v1` / `https://eu.openrouter.ai/api/v1` if
+  your OpenRouter account requires a regional one.
+- **Worker model for all roles**: one OpenRouter model id used by every role,
+  e.g. `z-ai/glm-5.3-flash`. Blank keeps each role's own model.
+
+To choose a model per role, use `role_models` in `config.yaml`; its entries
+override the all-roles setting for the roles they name (see
+[docs/configuration.md](configuration.md)). Restart Claude Code after changing
+either setting.
+
 ## Web research (optional)
 
 `web-researcher` (`mode: web`) is off until you turn it on. To enable it:

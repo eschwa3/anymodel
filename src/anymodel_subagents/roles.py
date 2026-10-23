@@ -228,8 +228,15 @@ def load_roles_with_warnings(
                 "(set allow_project_roles: true in config.yaml to enable)"
             )
 
-    # config.yaml's `role_models` wins over every role file's `model:` (load_config validated it).
-    for name, model in (getattr(cfg, "role_models", None) or {}).items():
+    # config.yaml's `role_models` wins over every role file's `model:` (load_config validated it);
+    # "*" covers every role without its own entry.
+    role_models = getattr(cfg, "role_models", None) or {}
+    if "*" in role_models:
+        for name in roles.keys() - role_models.keys():
+            roles[name] = replace(roles[name], model=role_models["*"])
+    for name, model in role_models.items():
+        if name == "*":
+            continue
         if name in roles:
             roles[name] = replace(roles[name], model=model)
         else:
