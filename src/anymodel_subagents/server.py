@@ -782,6 +782,7 @@ def _make_list_workers(
     models_http: httpx.AsyncClient | None,
     server_info: dict[str, Any] | None = None,
     budget: Budget | None = None,
+    models_base_url: str = models.DEFAULT_BASE_URL,
 ):
     async def list_workers(include_models: bool = False) -> dict[str, Any]:
         """List available roles (name, description, model, mode, isolation, source).
@@ -825,7 +826,9 @@ def _make_list_workers(
                 out["models"] = [{"error": "model discovery is not configured for this server"}]
             else:
                 try:
-                    out["models"] = await models.list_zdr_tool_models(models_http)
+                    out["models"] = await models.list_zdr_tool_models(
+                        models_http, base_url=models_base_url
+                    )
                 except Exception:
                     logger.exception("list_zdr_tool_models failed unexpectedly")
                     out["models"] = [{"error": "internal error while listing models"}]
@@ -912,6 +915,7 @@ def build_server(
     models_http: httpx.AsyncClient | None = None,
     server_info: dict[str, Any] | None = None,
     web_enabled: bool = False,
+    models_base_url: str = models.DEFAULT_BASE_URL,
 ) -> MCPServer:
     """Build the MCP server for `manager`, with all six SPEC.md tools registered.
 
@@ -940,6 +944,7 @@ def build_server(
             server_info,
             # getattr: a test double standing in for JobManager may not carry a budget.
             budget=getattr(manager, "budget", None),
+            models_base_url=models_base_url,
         )
     )
     mcp.add_tool(_make_usage_report(manager))
@@ -969,6 +974,7 @@ def _default_client_factory(cfg: Config) -> Callable[[], OpenRouterClient]:
             )
         return OpenRouterClient(
             api_key,
+            base_url=cfg.openrouter_base_url,
             max_output_tokens=cfg.max_output_tokens,
             provider_sort=cfg.provider_sort,
         )
@@ -988,6 +994,7 @@ def _server_info(cfg: Config, cfg_path: Path, api_key: str | None) -> dict[str, 
         "config_found": cfg_path.is_file(),
         "max_wait_s": cfg.max_wait_s,
         "max_output_tokens": cfg.max_output_tokens,
+        "openrouter_base_url": cfg.openrouter_base_url,
     }
 
 
@@ -1034,6 +1041,7 @@ async def _serve() -> None:
             models_http=models_http,
             server_info=server_info,
             web_enabled=cfg.web_enabled,
+            models_base_url=cfg.openrouter_base_url,
         )
         await mcp.run_stdio_async()
     finally:

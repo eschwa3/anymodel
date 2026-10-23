@@ -208,6 +208,7 @@ max_wait_s: 600           # Claude Code: one long wait per batch (leave 45 under
 budget_per_day_usd: 5.00  # spend backstop, off by default
 # timeout_s: 1800         # per-job wall clock, default 900; raise for slow test suites
 # provider_sort: throughput  # fastest ZDR provider, possibly pricier; default off
+# openrouter_base_url: https://us.openrouter.ai/api/v1  # or eu.; for accounts pinned to a region
 # web_enabled: true       # web-researcher role; needs a Brave key (see Web research)
 ```
 

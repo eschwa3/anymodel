@@ -100,6 +100,7 @@ async def _run_command(args: argparse.Namespace) -> int:
 
     client = OpenRouterClient(
         api_key,
+        base_url=cfg.openrouter_base_url,
         max_output_tokens=cfg.max_output_tokens,
         provider_sort=cfg.provider_sort,
     )

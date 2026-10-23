@@ -19,6 +19,13 @@ from anymodel_subagents.redact import redact
 from anymodel_subagents.types import Usage
 
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
+# The only hosts the API key may be sent to. Kept in sync with config.py's
+# `OPENROUTER_BASE_URLS`, which normalizes the user's value before it gets here.
+_ALLOWED_BASE_URLS = (
+    DEFAULT_BASE_URL,
+    "https://us.openrouter.ai/api/v1",
+    "https://eu.openrouter.ai/api/v1",
+)
 DEFAULT_MAX_OUTPUT_TOKENS = 16_384
 DEFAULT_PROVIDER_PREFS: dict[str, Any] = {
     "zdr": True,
@@ -167,6 +174,10 @@ class OpenRouterClient:
                 f"provider_sort must be one of {_VALID_PROVIDER_SORT} or None, "
                 f"got {provider_sort!r}"
             )
+
+        # Defense in depth, as for provider_sort: the key is sent to this URL.
+        if base_url.rstrip("/") not in _ALLOWED_BASE_URLS:
+            raise ValueError(f"base_url must be one of {_ALLOWED_BASE_URLS}")
 
         self.__api_key = api_key
         self._base_url = base_url.rstrip("/")

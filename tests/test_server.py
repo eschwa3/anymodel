@@ -1192,8 +1192,8 @@ async def test_list_workers_include_models_without_http_client_reports_error():
 async def test_list_workers_include_models_uses_provided_http_client(monkeypatch):
     calls = []
 
-    async def fake_list_zdr_tool_models(http):
-        calls.append(http)
+    async def fake_list_zdr_tool_models(http, *, base_url):
+        calls.append((http, base_url))
         return [{"model_id": "m/x", "prompt_price_per_m": 1.0}]
 
     monkeypatch.setattr(server.models, "list_zdr_tool_models", fake_list_zdr_tool_models)
@@ -1204,7 +1204,39 @@ async def test_list_workers_include_models_uses_provided_http_client(monkeypatch
     out = await list_workers(include_models=True)
 
     assert out["models"] == [{"model_id": "m/x", "prompt_price_per_m": 1.0}]
-    assert calls == [fake_http]
+    assert calls == [(fake_http, "https://openrouter.ai/api/v1")]
+
+
+async def test_list_workers_include_models_uses_configured_base_url(monkeypatch):
+    calls = []
+
+    async def fake_list_zdr_tool_models(http, *, base_url):
+        calls.append(base_url)
+        return []
+
+    monkeypatch.setattr(server.models, "list_zdr_tool_models", fake_list_zdr_tool_models)
+
+    list_workers = server._make_list_workers(
+        {}, [], "m/default", object(), models_base_url="https://eu.openrouter.ai/api/v1"
+    )
+    await list_workers(include_models=True)
+
+    assert calls == ["https://eu.openrouter.ai/api/v1"]
+
+
+def test_default_client_factory_uses_configured_base_url(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-v1-test")
+    cfg = Config(openrouter_base_url="https://us.openrouter.ai/api/v1")
+    client = server._default_client_factory(cfg)()
+    assert "us.openrouter.ai" in repr(client)
+
+
+def test_server_info_reports_openrouter_base_url(tmp_path: Path):
+    from anymodel_subagents.server import _server_info
+
+    cfg = Config(openrouter_base_url="https://eu.openrouter.ai/api/v1")
+    info = _server_info(cfg, tmp_path / "config.yaml", None)
+    assert info["openrouter_base_url"] == "https://eu.openrouter.ai/api/v1"
 
 
 # ---------------------------------------------------------------------------

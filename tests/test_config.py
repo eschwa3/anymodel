@@ -766,3 +766,79 @@ def test_load_config_budget_leaves_file_untouched(tmp_path: Path) -> None:
     before = path.read_text()
     load_config(path)
     assert path.read_text() == before
+
+
+# ---------------------------------------------------------------------------
+# openrouter_base_url
+# ---------------------------------------------------------------------------
+
+
+def test_openrouter_base_url_default_is_global() -> None:
+    assert Config().openrouter_base_url == "https://openrouter.ai/api/v1"
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("https://openrouter.ai/api/v1", "https://openrouter.ai/api/v1"),
+        ("https://us.openrouter.ai/api/v1", "https://us.openrouter.ai/api/v1"),
+        ("https://eu.openrouter.ai/api/v1", "https://eu.openrouter.ai/api/v1"),
+        ("https://us.openrouter.ai//api/v1", "https://us.openrouter.ai/api/v1"),
+        ("https://eu.openrouter.ai/api/v1/", "https://eu.openrouter.ai/api/v1"),
+        ("HTTPS://US.OpenRouter.ai/api/v1", "https://us.openrouter.ai/api/v1"),
+    ],
+)
+def test_load_config_openrouter_base_url_accepts_and_normalizes(
+    tmp_path: Path, value: str, expected: str
+) -> None:
+    path = tmp_path / "config.yaml"
+    path.write_text(f"openrouter_base_url: {value!r}\n")
+    assert load_config(path).openrouter_base_url == expected
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "http://us.openrouter.ai/api/v1",
+        "https://evil.example/api/v1",
+        "https://openrouter.ai.evil.example/api/v1",
+        "https://evilopenrouter.ai/api/v1",
+        "https://ap.openrouter.ai/api/v1",
+        "https://user@us.openrouter.ai/api/v1",
+        "https://evil.example@us.openrouter.ai/api/v1",
+        "https://us.openrouter.ai:8443/api/v1",
+        "https://us.openrouter.ai/api/v2",
+        "https://us.openrouter.ai/api/v1?x=1",
+        "https://us.openrouter.ai/api/v1#frag",
+        "https://us.openrouter.ai",
+        "us.openrouter.ai/api/v1",
+        "",
+        "https://openrouter.ai@evil.example/api/v1",
+        "https://evil.example\\@us.openrouter.ai/api/v1",
+        "https://us.openrouter.ai\\api\\v1",
+        "https://us.openrouter.ai:443/api/v1",
+        "https://\u212a.openrouter.ai/api/v1",
+        "https://\uff4fpenrouter.ai/api/v1",
+        "https://us.openrouter.ai/api/v1\r\nX: y",
+        "https://us.openrouter.ai\x00.evil.example/api/v1",
+        "https://us.openrouter.ai./api/v1",
+    ],
+)
+def test_load_config_openrouter_base_url_rejects_others(tmp_path: Path, value: str) -> None:
+    path = tmp_path / "config.yaml"
+    path.write_text(f"openrouter_base_url: {value!r}\n")
+    with pytest.raises(ValueError, match="openrouter_base_url"):
+        load_config(path)
+
+
+def test_load_config_openrouter_base_url_rejects_wrong_type(tmp_path: Path) -> None:
+    path = tmp_path / "config.yaml"
+    path.write_text("openrouter_base_url: null\n")
+    with pytest.raises(ValueError, match="openrouter_base_url.*must be"):
+        load_config(path)
+
+
+def test_openrouter_base_url_allowlist_matches_client() -> None:
+    from anymodel_subagents import config, openrouter
+
+    assert config.OPENROUTER_BASE_URLS == openrouter._ALLOWED_BASE_URLS

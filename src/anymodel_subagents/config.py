@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 import subprocess
 from dataclasses import dataclass, fields, replace
 from pathlib import Path
@@ -131,6 +132,9 @@ class Config:
     # (default) sends today's request bodies unchanged. Set turns off OpenRouter's default
     # price-weighted load balancing among ZDR-eligible providers, so it can pick a pricier one.
     provider_sort: str | None = None
+    # OpenRouter API base. Only the hosts in `OPENROUTER_BASE_URLS` are accepted: the API key is
+    # sent here, so a typo or a tampered file must not be able to point it anywhere else.
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
     # Web access for `web` mode workers (docs/adr/0001-worker-web-access.md). Off by default;
     # also needs BRAVE_API_KEY in the server env. Only this file can turn it on.
     web_enabled: bool = False
@@ -158,6 +162,7 @@ _FIELD_TYPES: dict[str, tuple[type, ...]] = {
     "bash_repo_venv": (bool,),
     "allow_project_roles": (bool,),
     "provider_sort": (str, type(None)),
+    "openrouter_base_url": (str,),
     "web_enabled": (bool,),
     "web_max_calls_per_job": (int,),
     "web_denylist_extra": (list,),
@@ -169,6 +174,14 @@ _KNOWN_FIELDS = {f.name for f in fields(Config)}
 # module's constructor validates independently of load_config -- defense in depth, not just
 # a single choke point).
 _VALID_PROVIDER_SORT = ("throughput", "latency", "price")
+
+# Kept in sync with openrouter.py's `_ALLOWED_BASE_URLS` (checked there too, same reason as
+# `_VALID_PROVIDER_SORT`). Global plus the regional in-region endpoints.
+OPENROUTER_BASE_URLS = (
+    "https://openrouter.ai/api/v1",
+    "https://us.openrouter.ai/api/v1",
+    "https://eu.openrouter.ai/api/v1",
+)
 
 # Spend caps: same null/int/float typing as above, but out-of-range values are
 # rejected rather than clamped -- a silently-raised cap could spend past what
@@ -240,6 +253,26 @@ def config_path() -> Path:
     xdg_config = os.environ.get("XDG_CONFIG_HOME")
     base = Path(xdg_config).expanduser() if xdg_config else Path.home() / ".config"
     return base / _APP_NAME / "config.yaml"
+
+
+def _normalize_openrouter_base_url(value: str) -> str:
+    """Canonical form of an OpenRouter base URL, or ValueError if it isn't an allowed one.
+
+    Tolerates case in scheme/host, repeated slashes, and a trailing slash
+    (`https://us.openrouter.ai//api/v1/` -> `https://us.openrouter.ai/api/v1`); rejects
+    anything else -- other hosts, http, ports, userinfo, query, fragment.
+    """
+    m = re.fullmatch(r"(?i)(https)://([a-z0-9.-]+)(/[^?#]*)", value.strip())
+    if m:
+        path = re.sub(r"/+", "/", m.group(3)).rstrip("/")
+        candidate = f"https://{m.group(2).lower()}{path}"
+        if candidate in OPENROUTER_BASE_URLS:
+            return candidate
+    msg = (
+        f"config key 'openrouter_base_url' must be one of {OPENROUTER_BASE_URLS}, "
+        f"got {value[:80]!r}"
+    )
+    raise ValueError(msg)
 
 
 def _clamp(value: float, lo: float, hi: float) -> float:
@@ -326,6 +359,8 @@ def load_config(path: Path | None = None) -> Config:
                 )
                 raise ValueError(msg)
             values[key] = value
+        elif key == "openrouter_base_url":
+            values[key] = _normalize_openrouter_base_url(value)
         elif key in _BUDGET_KEYS:
             # `null` = no cap; ints normalize to float. Rejected (not clamped)
             # when <= 0 or non-finite. Bools never reach here (rejected above).

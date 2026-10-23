@@ -597,3 +597,23 @@ def test_provider_text_key_prefix_left_by_the_scan_cap_is_withheld():
 )
 def test_realistic_provider_errors_are_not_withheld(message):
     assert _clean_provider_text(message, ["sk-or-v1-decoy000000000000000000"]) == message
+
+
+@pytest.mark.parametrize("region", ["us", "eu"])
+@respx.mock
+async def test_regional_base_url_routes_chat_completions(region):
+    url = f"https://{region}.openrouter.ai/api/v1/chat/completions"
+    route = respx.post(url).mock(return_value=_ok_response())
+    client = OpenRouterClient("sk-test", base_url=f"https://{region}.openrouter.ai/api/v1")
+    try:
+        await client.chat_completions(model="m", messages=[{"role": "user", "content": "hi"}])
+    finally:
+        await client.aclose()
+    assert route.called
+    assert json.loads(route.calls[0].request.content)["provider"]["zdr"] is True
+
+
+@pytest.mark.parametrize("base_url", ["https://evil.example/api/v1", "http://openrouter.ai/api/v1"])
+def test_constructor_rejects_unlisted_base_url(base_url):
+    with pytest.raises(ValueError, match="base_url"):
+        OpenRouterClient("sk-test", base_url=base_url)
