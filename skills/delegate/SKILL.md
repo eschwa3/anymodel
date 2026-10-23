@@ -49,7 +49,9 @@ self-contained:
   already know; a good codegen prompt is usually 1,500+ characters: files to
   touch, behaviour, edge cases, the test command.
 - Pick a `role` for the task rather than picking a model — roles carry a
-  sensible model/mode/tool-loop default. Only override `model` when the user
+  sensible model/mode/tool-loop default, and the user may have chosen each
+  role's model (`role_models` in `config.yaml`, or the plugin's all-roles
+  setting); `list_workers` shows the effective model. Only override `model` when the user
   asks for a specific one or you're intentionally running a multi-model
   consensus check. For review consensus, dispatch the same `reviewer` prompt
   two or three times with different `model` overrides (e.g. the role default
@@ -88,6 +90,12 @@ know from the repo:
   `/web-extract <url> <what>`.
 - `web-researcher`: open-ended questions that need several sources weighed
   (library behavior, CVEs, prior art, "how do other projects configure X").
+
+If a job fails because its model has no ZDR provider (more likely when the
+user's account uses a regional US/EU endpoint), tell the user once: they can
+pick a model from `list_workers` with `include_models=true` and set it with
+`role_models` in `config.yaml` or the plugin's **Worker model for all roles**
+setting. Don't retry with guessed model ids.
 
 They're only available when the user has
 turned on web access in their own `config.yaml`; don't tell a user to change

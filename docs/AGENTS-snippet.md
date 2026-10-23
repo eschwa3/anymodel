@@ -15,7 +15,9 @@ in headless runs as an unauthorized export of repository contents.
 
 - Write self-contained prompts — a worker sees none of this conversation.
   Name exact files/dirs, state the deliverable and report format.
-- Pick a `role`, not a model, unless the user asks for a specific one.
+- Pick a `role`, not a model, unless the user asks for a specific one. The
+  user sets each role's model (`role_models` in `config.yaml` or the plugin
+  settings); `list_workers` shows the effective one.
 - Loop: `dispatch` the batch -> one `wait` (no `timeout_s`: it blocks for the
   server's `max_wait_s` and returns slim results for finished jobs; repeat only
   if `done` is false) -> read `report_path` or `results(full=true)` only when

@@ -78,6 +78,12 @@ Read it before pointing a worker at anything you care about.
   prior, unrelated project. The web-provider keys are added to the same
   redactor live-secret list and covered by the same regression test as the
   OpenRouter key.
+- **Where the OpenRouter key goes.** Only to `https://openrouter.ai/api/v1`,
+  `https://us.openrouter.ai/api/v1` or `https://eu.openrouter.ai/api/v1`.
+  `openrouter_base_url` (or the plugin's endpoint setting) is normalized and
+  checked against that list at config load, and `OpenRouterClient` checks it
+  again; any other host, scheme, port or userinfo is rejected. Redirects are
+  not followed.
 - **Config integrity.** No MCP tool can write `config.yaml`, allowlists, or
   anything else that changes the server's own policy. `config.yaml` is
   user-edited only.

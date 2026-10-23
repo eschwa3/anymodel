@@ -23,7 +23,7 @@ An MCP server that gives Claude Code and Codex CLI **subagents that run on outsi
 
 ## Worker engine (own loop)
 
-- `httpx` → `POST https://openrouter.ai/api/v1/chat/completions` with tool calling; asyncio fan-out, global concurrency cap (default 8), per-job `max_turns` (default 40) and wall-clock timeout, retry on 429/5xx.
+- `httpx` → `POST https://openrouter.ai/api/v1/chat/completions` (or the `us.`/`eu.` regional host from `openrouter_base_url`; no other host is accepted) with tool calling; asyncio fan-out, global concurrency cap (default 8), per-job `max_turns` (default 40) and wall-clock timeout, retry on 429/5xx.
 - Every request carries `provider: {zdr: true, data_collection: "deny", require_parameters: true}` — hardcoded on; nothing in config or any MCP tool can turn it off.
 - Cost from `usage.cost` (always present in OpenRouter responses) + cached/reasoning token details → append-only `ledger.jsonl`.
 - Context given to a worker: role prompt + task prompt + the project's `AGENTS.md`/`CLAUDE.md` (size-capped) + cwd listing. Never the orchestrator's conversation.
@@ -103,6 +103,6 @@ Ships with `reviewer`, `researcher`, `codegen` (edit, worktree), `test-writer`, 
 
 ## Open items
 
-- Resolved — default model IDs: `deepseek/deepseek-v4.1-flash` (config/server default, and the `reviewer`/`researcher`/`test-writer` roles) and `z-ai/glm-5.3-flash` (`codegen`); model discovery uses OpenRouter's public, keyless `/endpoints/zdr` listing.
+- Resolved — default model IDs: `deepseek/deepseek-v4.1-flash` (config/server default, and the `reviewer`/`researcher`/`test-writer` roles) and `z-ai/glm-5.3-flash` (`codegen`); model discovery uses OpenRouter's public, keyless `/endpoints/zdr` listing (flat, one record per provider endpoint, grouped by `model_id`) on the configured host. Users re-point roles with `role_models` in `config.yaml` (`"*"` for all) or the plugin's all-roles model setting.
 - Verify whether Codex runs stdio MCP servers outside its sandbox (assumed yes; design doesn't depend on it).
 - Resolved — name: `anymodel-subagents`.

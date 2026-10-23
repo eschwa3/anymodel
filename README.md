@@ -28,7 +28,9 @@ timings, costs and findings are the recorded ones.
 /plugin install anymodel-subagents@anymodel
 ```
 
-Paste your OpenRouter key when prompted (it goes to your OS keychain). That's
+Paste your OpenRouter key when prompted (it goes to your OS keychain). Two
+optional fields under `/plugin` set a regional OpenRouter endpoint (US or EU)
+and one worker model for every role; leave them blank for the defaults. That's
 it: the bundled `delegate` skill now routes delegation to workers, and
 `/swarm <task>` fans a task out by hand (plus `/web-search` and `/web-extract`
 once [web research](#web-research-optional) is on). **Codex CLI:** see
@@ -55,6 +57,9 @@ Then, inside any git repository:
 - An OpenRouter key: make a **dedicated key with a credit limit**
   (openrouter.ai/keys) and switch on **Zero Data Retention**
   (openrouter.ai/settings/privacy). Without it, no request finds a provider.
+  If your account must use a regional endpoint (`us.openrouter.ai` or
+  `eu.openrouter.ai`), set it in the plugin's **OpenRouter endpoint** field or
+  `openrouter_base_url` in `config.yaml`.
 
 </details>
 
@@ -212,8 +217,12 @@ budget_per_day_usd: 5.00  # spend backstop, off by default
 # web_enabled: true       # web-researcher role; needs a Brave key (see Web research)
 # role_models:            # pick the model per role; a task's own model still wins
 #   codegen: z-ai/glm-5.3-flash
-#   reviewer: deepseek/deepseek-v4.1-flash
+#   "*": deepseek/deepseek-v4.1-flash   # every role without its own entry
 ```
+
+Claude Code users can set the endpoint and an all-roles model in `/plugin`
+instead; when both are set, `config.yaml` wins. Codex users can put the same two
+values in the server's `env` ([`docs/codex.md`](docs/codex.md)).
 
 All keys, roles and the state directory: [`docs/configuration.md`](docs/configuration.md).
 
@@ -245,9 +254,19 @@ or error message.
 
 **Which models do workers use?** Each role has a default picked by the
 [bake-off](bakeoff/README.md): `glm-5.3-flash` for `codegen`,
-`deepseek-v4.1-flash` for the rest. Pass `model` to override, or run
-`list_workers` with `include_models=true` for every ZDR-capable model and its
-price.
+`deepseek-v4.1-flash` for the rest. Change them without touching role files:
+one model for every role in the plugin's **Worker model for all roles** field,
+or per role with `role_models` in `config.yaml`. A task's own `model` overrides
+both. `list_workers` shows each role's effective model, and with
+`include_models=true` every ZDR-capable model that supports tool calls on your
+endpoint, with prices.
+
+**My OpenRouter account requires the US or EU endpoint.** Set the plugin's
+**OpenRouter endpoint** field (or `openrouter_base_url`) to
+`https://us.openrouter.ai/api/v1` or `https://eu.openrouter.ai/api/v1`. Fewer
+models have ZDR providers in a region (the EU list has no
+`deepseek-v4.1-flash`), so check `list_workers` with `include_models=true` and
+pick role models from it.
 
 **Is my code sent anywhere?** To the OpenRouter provider serving the model,
 for inference only: every request requires Zero Data Retention and denies
