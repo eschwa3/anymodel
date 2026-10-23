@@ -842,3 +842,41 @@ def test_openrouter_base_url_allowlist_matches_client() -> None:
     from anymodel_subagents import config, openrouter
 
     assert config.OPENROUTER_BASE_URLS == openrouter._ALLOWED_BASE_URLS
+
+
+# ---------------------------------------------------------------------------
+# role_models
+# ---------------------------------------------------------------------------
+
+
+def test_role_models_default_is_empty() -> None:
+    assert Config().role_models == {}
+
+
+def test_load_config_role_models(tmp_path: Path) -> None:
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        "role_models:\n  codegen: z-ai/glm-5.3-flash\n  reviewer: deepseek/deepseek-v4.1-flash\n"
+    )
+    assert load_config(path).role_models == {
+        "codegen": "z-ai/glm-5.3-flash",
+        "reviewer": "deepseek/deepseek-v4.1-flash",
+    }
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "role_models: [codegen]\n",
+        "role_models:\n  codegen: 5\n",
+        "role_models:\n  codegen: null\n",
+        "role_models:\n  codegen: 'bad model with spaces'\n",
+        "role_models:\n  Codegen: a/b\n",
+        "role_models:\n  1: a/b\n",
+    ],
+)
+def test_load_config_role_models_rejects_bad_values(tmp_path: Path, body: str) -> None:
+    path = tmp_path / "config.yaml"
+    path.write_text(body)
+    with pytest.raises(ValueError, match="role_models"):
+        load_config(path)

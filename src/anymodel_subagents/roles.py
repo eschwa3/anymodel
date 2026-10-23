@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Literal
 
@@ -205,6 +205,7 @@ def load_roles_with_warnings(
     reason is appended to the returned warnings list instead. Project-level
     roles (`<project_dir>/.workers/*.md`) are only loaded when `cfg` has
     `allow_project_roles` set truthy; see the module docstring's SECURITY note.
+    `cfg.role_models` then replaces the model of each named role.
     """
     roles: dict[str, Role] = {}
     warnings: list[str] = []
@@ -226,6 +227,13 @@ def load_roles_with_warnings(
                 f"{project_workers_dir}: project role files found but not loaded "
                 "(set allow_project_roles: true in config.yaml to enable)"
             )
+
+    # config.yaml's `role_models` wins over every role file's `model:` (load_config validated it).
+    for name, model in (getattr(cfg, "role_models", None) or {}).items():
+        if name in roles:
+            roles[name] = replace(roles[name], model=model)
+        else:
+            warnings.append(f"config.yaml role_models: no role named {name!r}")
 
     return roles, warnings
 

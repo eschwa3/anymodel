@@ -11,7 +11,7 @@ import math
 import os
 import re
 import subprocess
-from dataclasses import dataclass, fields, replace
+from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
 from typing import Any
 
@@ -95,6 +95,9 @@ DEFAULT_BASH_ALLOW: tuple[str, ...] = (
 @dataclass(frozen=True)
 class Config:
     default_model: str = "deepseek/deepseek-v4.1-flash"
+    # Role name -> model, overriding the `model:` in that role's file (bundled, user, or
+    # project). A task's own `model` still wins. Lets users swap models without copying roles.
+    role_models: dict[str, str] = field(default_factory=dict)
     max_concurrency: int = 8
     max_turns: int = 40
     timeout_s: float = 900.0
@@ -146,6 +149,7 @@ class Config:
 # Field name -> expected type(s), for validating user-supplied config.yaml values.
 _FIELD_TYPES: dict[str, tuple[type, ...]] = {
     "default_model": (str,),
+    "role_models": (dict,),
     "max_concurrency": (int,),
     "max_turns": (int,),
     "timeout_s": (int, float),
@@ -174,6 +178,11 @@ _KNOWN_FIELDS = {f.name for f in fields(Config)}
 # module's constructor validates independently of load_config -- defense in depth, not just
 # a single choke point).
 _VALID_PROVIDER_SORT = ("throughput", "latency", "price")
+
+# Kept in sync with roles.py's `_NAME_RE` / `_MODEL_RE` by hand (config.py imports nothing
+# from the package; roles.py and jobs.py duplicate the model pattern for the same reason).
+_ROLE_NAME_RE = re.compile(r"^[a-z0-9-]{2,40}$")
+_MODEL_RE = re.compile(r"^[A-Za-z0-9._:/-]{3,100}$")
 
 # Kept in sync with openrouter.py's `_ALLOWED_BASE_URLS` (checked there too, same reason as
 # `_VALID_PROVIDER_SORT`). Global plus the regional in-region endpoints.
@@ -359,6 +368,15 @@ def load_config(path: Path | None = None) -> Config:
                 )
                 raise ValueError(msg)
             values[key] = value
+        elif key == "role_models":
+            for name, model in value.items():
+                if not isinstance(name, str) or not _ROLE_NAME_RE.match(name):
+                    msg = f"config key 'role_models' has an invalid role name: {str(name)[:40]!r}"
+                    raise ValueError(msg)
+                if not isinstance(model, str) or not _MODEL_RE.match(model):
+                    msg = f"config key 'role_models' has an invalid model for {name!r}"
+                    raise ValueError(msg)
+            values[key] = dict(value)
         elif key == "openrouter_base_url":
             values[key] = _normalize_openrouter_base_url(value)
         elif key in _BUDGET_KEYS:

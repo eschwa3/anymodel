@@ -24,7 +24,8 @@ applied.
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
-| `default_model` | string | `deepseek/deepseek-v4.1-flash` | Model used when a task doesn't set `model` |
+| `default_model` | string | `deepseek/deepseek-v4.1-flash` | Model used when a task sets neither `model` nor `role` |
+| `role_models` | map of role name → model | `{}` | Per-role model, overriding the `model:` in that role's file (bundled, user, or project). A task's own `model` still wins. A name that matches no role is reported in `list_workers` warnings. Example: `role_models: {codegen: z-ai/glm-5.3-flash, reviewer: deepseek/deepseek-v4.1-flash}` |
 | `max_concurrency` | int (1-32) | `8` | Global cap on simultaneously running worker jobs |
 | `max_turns` | int (1-200) | `40` | Default per-job turn cap (a task's `max_turns` can lower it, not raise it past the config's clamp) |
 | `timeout_s` | number | `900.0` | Wall-clock timeout per job, in seconds (clamped to 10–86400). A `dispatch` task may pass its own `timeout_s` to shorten this for that task, never to extend it; unrelated to `wait`'s `timeout_s` |
@@ -200,6 +201,10 @@ role shadows a user or bundled role with the same name. The rendered role
 list (name, description, model, mode) is what both `list_workers` and the
 `dispatch` tool description show, so the two clients stay in sync
 automatically.
+
+To change a role's model without copying its file, set it in `config.yaml`'s
+`role_models`. Precedence: a task's `model`, then `role_models`, then the role
+file's `model:`.
 
 A task's `model` field overrides a role's default model for that one task —
 useful for one-off swaps or for running the same prompt under several models

@@ -20,6 +20,7 @@ from anymodel_subagents.roles import Role, load_roles, load_roles_with_warnings
 @dataclass
 class FakeCfg:
     allow_project_roles: bool = False
+    role_models: dict[str, str] | None = None
 
 
 def write_role(
@@ -460,3 +461,48 @@ def test_real_bundled_roles_all_parse_without_warnings(tmp_path, monkeypatch):
     for role in found.values():
         assert role.source == "bundled"
         assert role.prompt.strip()
+
+
+# ---------------------------------------------------------------------------
+# config.yaml role_models
+# ---------------------------------------------------------------------------
+
+
+def test_role_models_overrides_the_role_file_model(tmp_path, monkeypatch):
+    bundled = tmp_path / "bundled"
+    write_role(bundled, "reviewer.md")
+    write_role(bundled, "coder.md", name="coder")
+    patch_dirs(monkeypatch, tmp_path, bundled=bundled)
+
+    found, warnings = load_roles_with_warnings(cfg=FakeCfg(role_models={"reviewer": "z-ai/glm"}))
+
+    assert warnings == []
+    assert found["reviewer"].model == "z-ai/glm"
+    assert found["reviewer"].description == "Reviews stuff."  # only the model changes
+    assert found["coder"].model == "deepseek/deepseek-v4.1-flash"
+
+
+def test_role_models_overrides_user_and_project_roles(tmp_path, monkeypatch):
+    user = tmp_path / "user"
+    project = tmp_path / "repo"
+    write_role(user, "reviewer.md", model="user/model")
+    write_role(project / ".workers", "coder.md", name="coder", model="project/model")
+    patch_dirs(monkeypatch, tmp_path, user=user)
+
+    cfg = FakeCfg(allow_project_roles=True, role_models={"reviewer": "a/x", "coder": "b/y"})
+    found, _warnings = load_roles_with_warnings(project_dir=project, cfg=cfg)
+
+    assert found["reviewer"].model == "a/x"
+    assert found["coder"].model == "b/y"
+
+
+def test_role_models_unknown_role_warns(tmp_path, monkeypatch):
+    bundled = tmp_path / "bundled"
+    write_role(bundled, "reviewer.md")
+    patch_dirs(monkeypatch, tmp_path, bundled=bundled)
+
+    found, warnings = load_roles_with_warnings(cfg=FakeCfg(role_models={"reviwer": "a/x"}))
+
+    assert set(found) == {"reviewer"}
+    assert len(warnings) == 1
+    assert "reviwer" in warnings[0]

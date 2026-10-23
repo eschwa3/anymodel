@@ -210,6 +210,9 @@ budget_per_day_usd: 5.00  # spend backstop, off by default
 # provider_sort: throughput  # fastest ZDR provider, possibly pricier; default off
 # openrouter_base_url: https://us.openrouter.ai/api/v1  # or eu.; for accounts pinned to a region
 # web_enabled: true       # web-researcher role; needs a Brave key (see Web research)
+# role_models:            # pick the model per role; a task's own model still wins
+#   codegen: z-ai/glm-5.3-flash
+#   reviewer: deepseek/deepseek-v4.1-flash
 ```
 
 All keys, roles and the state directory: [`docs/configuration.md`](docs/configuration.md).

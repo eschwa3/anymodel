@@ -617,6 +617,22 @@ async def test_role_supplies_defaults_for_unset_task_fields(tmp_path, monkeypatc
     assert job.spec.max_turns == 33
 
 
+async def test_config_role_models_sets_model_for_a_bundled_role(tmp_path, monkeypatch):
+    # Real loader (no stub_roles): the bundled `reviewer` role, re-pointed by config.yaml.
+    cfg = make_cfg(role_models={"reviewer": "override/model"})
+    mgr = make_manager(tmp_path, monkeypatch, cfg=cfg)
+
+    _swarm_id, created = await mgr.dispatch(
+        [
+            jobs.TaskSpec(prompt="p", cwd=str(tmp_path), role="reviewer"),
+            jobs.TaskSpec(prompt="p", cwd=str(tmp_path), role="reviewer", model="task/model"),
+        ]
+    )
+
+    assert created[0].spec.model == "override/model"
+    assert created[1].spec.model == "task/model"  # a task's own model still wins
+
+
 async def test_explicit_task_fields_override_role_fields(tmp_path, monkeypatch):
     role = make_role()
     stub_roles(monkeypatch, {"codegen": role})
