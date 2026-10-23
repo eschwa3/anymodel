@@ -224,7 +224,8 @@ Claude Code users can set the endpoint and an all-roles model in `/plugin`
 instead; when both are set, `config.yaml` wins. Codex users can put the same two
 values in the server's `env` ([`docs/codex.md`](docs/codex.md)).
 
-All keys, roles and the state directory: [`docs/configuration.md`](docs/configuration.md).
+All keys, roles and the state directory: [`docs/configuration.md`](docs/configuration.md);
+setting worker models: [Choosing models](docs/configuration.md#choosing-models).
 
 <details>
 <summary><b>MCP tools</b></summary>

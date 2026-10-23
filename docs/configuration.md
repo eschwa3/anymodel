@@ -74,6 +74,45 @@ are set. Finished jobs are also capped in the server's own memory (oldest
 finished first); anything past that bound stays fully queryable, just read
 back from its `meta.json` on disk instead of an in-memory cache.
 
+### Choosing models
+
+Each role has its own model, so `default_model` alone changes little: it only
+applies to tasks dispatched with no role, which is rare.
+
+- **One model for everything.** In Claude Code, set `/plugin` →
+  anymodel-subagents → **Worker model for all roles**; it sets both
+  `default_model` and every role. In `config.yaml`, set both yourself:
+
+  ```yaml
+  default_model: deepseek/deepseek-v4.1-flash
+  role_models:
+    "*": deepseek/deepseek-v4.1-flash   # every role without its own entry
+  ```
+
+- **A few roles.** List only those under `role_models`; the others keep their
+  defaults.
+- **Everything, with exceptions.** Set `"*"` (or the plugin field) plus the
+  roles that differ; a role's own entry wins over `"*"`:
+
+  ```yaml
+  default_model: deepseek/deepseek-v4.1-flash
+  role_models:
+    "*": deepseek/deepseek-v4.1-flash
+    codegen: z-ai/glm-5.3-flash
+  ```
+
+Precedence: a task's own `model` > `role_models.<role>` > `role_models."*"` >
+the role file's `model:`. `config.yaml` wins over the plugin fields. The
+bundled roles are `codegen`, `test-writer`, `reviewer`, `researcher`, and,
+with `web_enabled: true`, `web-searcher`, `web-extractor`, `web-researcher`.
+
+Check the result with `list_workers`: it shows each role's effective model,
+warns about a `role_models` name that matches no role, and with
+`include_models=true` lists the ZDR models with tool calls on your endpoint.
+Regional endpoints carry fewer models (the EU list has no
+`deepseek-v4.1-flash`), so pick from that list. Restart the client after any
+change.
+
 ### Budget caps
 
 `budget_per_swarm_usd` and `budget_per_day_usd` are caps on OpenRouter
