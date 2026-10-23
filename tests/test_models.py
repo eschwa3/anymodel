@@ -1,8 +1,9 @@
 """Tests for anymodel_subagents.models.list_zdr_tool_models.
 
-Uses respx to mock OpenRouter's public `/endpoints/zdr` listing. The exact
-response shape isn't publicly pinned down anywhere in this repo, so the
-fixture below follows OpenRouter's documented `/models`-family convention
+Uses respx to mock OpenRouter's public `/endpoints/zdr` listing. The live
+listing is flat (one record per provider endpoint, see
+`test_live_flat_shape_is_grouped_by_model`); most fixtures below use the
+older nested shape, which is still accepted. That nested fixture follows OpenRouter's documented `/models`-family convention
 (a top-level `data` list of models, each carrying a list of provider
 `endpoints`) extended with the `endpoints`-specific fields this module reads:
 `supported_parameters`, `pricing` (strings, USD per token), `context_length`,
@@ -438,3 +439,60 @@ async def test_does_not_send_authorization_header():
 
     sent_headers = route.calls[0].request.headers
     assert "authorization" not in {k.lower() for k in sent_headers}
+
+
+def _flat(model_id: str, provider: str, prompt: str, tools: bool = True, **extra) -> dict:
+    # Trimmed from a real `https://us.openrouter.ai/api/v1/endpoints/zdr` record (2026-10).
+    return {
+        "name": f"{provider} | {model_id}",
+        "model_id": model_id,
+        "model_name": f"Name of {model_id}",
+        "context_length": extra.get("context_length", 131072),
+        "pricing": {"prompt": prompt, "completion": "0.000002", "discount": 0},
+        "provider_name": provider,
+        "tag": provider.lower(),
+        "supported_parameters": ["max_tokens", "tools", "tool_choice"] if tools else ["max_tokens"],
+        "supports_implicit_caching": extra.get("caching", False),
+        "status": 0,
+    }
+
+
+@respx.mock
+async def test_live_flat_shape_is_grouped_by_model():
+    """Regression: the live listing returns flat per-endpoint records, which the nested-only
+    parser skipped entirely, so `list_workers(include_models=True)` returned no models."""
+    fixture = {
+        "data": [
+            _flat("vendor/a", "P1", "0.000001", context_length=64000),
+            _flat("vendor/a", "P2", "0.0000005", caching=True),
+            _flat("vendor/b", "P1", "0.0000002", tools=False),
+            _flat("vendor/c", "P3", "0.0000003"),
+        ]
+    }
+    respx.get(ZDR_URL).mock(return_value=httpx.Response(200, json=fixture))
+
+    result = await models.list_zdr_tool_models(httpx.AsyncClient())
+
+    assert [m["model_id"] for m in result] == ["vendor/c", "vendor/a"]
+    a = result[1]
+    assert a["name"] == "Name of vendor/a"
+    assert a["prompt_price_per_m"] == pytest.approx(0.5)
+    assert a["context_length"] == 131072
+    assert a["zdr_provider_count"] == 2
+    assert a["supports_implicit_caching"] is True
+
+
+@respx.mock
+async def test_listing_uses_regional_base_url():
+    url = "https://us.openrouter.ai/api/v1/endpoints/zdr"
+    route = respx.get(url).mock(
+        return_value=httpx.Response(200, json={"data": [_flat("vendor/a", "P1", "0.000001")]})
+    )
+
+    result = await models.list_zdr_tool_models(
+        httpx.AsyncClient(), base_url="https://us.openrouter.ai/api/v1"
+    )
+
+    assert route.called
+    assert "authorization" not in route.calls[0].request.headers
+    assert [m["model_id"] for m in result] == ["vendor/a"]

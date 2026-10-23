@@ -63,12 +63,36 @@ async def _fetch_payload(http: httpx.AsyncClient, base_url: str) -> dict[str, An
     return payload
 
 
+def _nest_flat_endpoints(entries: list[Any]) -> list[Any]:
+    """Regroup the live listing's flat shape -- one record per provider endpoint, keyed by
+    `model_id`, with the model's display name in `model_name` -- into the nested
+    `{id, name, endpoints: [...]}` shape `_group_by_model` reads. Nested entries pass through.
+    """
+    nested: list[Any] = []
+    by_model: dict[str, dict[str, Any]] = {}
+    for entry in entries:
+        if not isinstance(entry, dict) or "endpoints" in entry:
+            nested.append(entry)
+            continue
+        model_id = entry.get("model_id")
+        if not isinstance(model_id, str):
+            continue
+        group = by_model.get(model_id)
+        if group is None:
+            group = {"id": model_id, "name": entry.get("model_name"), "endpoints": []}
+            by_model[model_id] = group
+            nested.append(group)
+        group["endpoints"].append(entry)
+    return nested
+
+
 def _group_by_model(
     payload: dict[str, Any], *, max_input_price_per_m: float | None
 ) -> list[dict[str, Any]]:
     entries = payload.get("data")
     if not isinstance(entries, list):
         return []
+    entries = _nest_flat_endpoints(entries)
 
     results: list[dict[str, Any]] = []
     for model_entry in entries:
